@@ -1,27 +1,29 @@
 ![Logo](run/resources/icon_medium.png)
 # VkUtils
 ## 🕶️ Overview
-This project is my attempt at creating a Vulkan API abstraction for C, as there are not many libraries for the C devs out there. This abstraction simplifies Vulkan use very much without sacrificing performance. Its intended use is for simple or medium sized games or scientific applications.
+This project is my attempt to create a Vulkan API abstraction for C, as there are not many libraries available for C developers. This abstraction significantly simplifies the use of Vulkan without compromising performance. It is designed for simple to medium-sized games or scientific applications.
 
 ## 📋 Features
-- Abstraction of VkInstance, VkDevice, VmaAllocator, etc. into the **VkuContext**. It serves as the base for your program.
-- The **VkuMemoryManager** uses the VMA from AMD to manage memory efficiently and create or destroy a **VkuBuffer**.
-- The **VkuPresenter** creates an Window and can be used as a RenderTarget. It holds the VkSwapchainKHR handles syncronization while rendering. It also recreates all necessary resources on window resize.
-- A **VkuRenderStage** is my abstraction of handling a VkRenderPass along with its VkFramebuffers and resources (Images & ImageViews). When MSAA is enabled render resources (not for resolve) are shared along multiple renderStages. A VkuRenderStage can be **static** (fixed Resolution) or **dynamic** (resolution and format scale with window).
-- Easy creation of textures **VkuTexture2D** and texture arrays **VkuTexture2DArray** from pixel data (uint8_t*)
-- Easy creation of descriptorSets (**VkuDescriptorSet**), currently supporting **VkuSampler** (alongside a texture or texture array) and a **VkuUniformBuffer**. It abstracts VkDescriptorSetLayout.
-- Each renderStage can have multiple **VkuPipeline**'s. The pipeline takes in the shaders, **VkuVertexLayout** and many other relevant render options and abstracts VkPipelineLayout. 
-- A frame is handled in a **VkuFrame**. It manages the cmdBuffer. In the frame renderStages, pipelines, etc. can be bound, uniformBuffer updated and drawCmds send. (All function have VKU wrapper functions)
-- Full **C++ compatibility** (yes, C code must not be cpp compatible).
+-VkuContext abstracts key Vulkan objects like `VkInstance`, `VkDevice`, `VmaAllocator`, etc. It serves as the foundation for your program.
+-The `VkuMemoryManager` uses AMD’s VMA (Vulkan Memory Allocator) to efficiently manage memory and handle the creation or destruction of `VkuBuffer` objects.
+-The `VkuPresenter` manages the window and can be used as a render target. It encapsulates the VkSwapchainKHR and handles synchronization during rendering. It also recreates all necessary resources when the window is resized.
+-A `VkuRenderStage` abstracts the management of a VkRenderPass along with its VkFramebuffer objects and associated resources (VkImage and VkImageView). When MSAA is enabled, render resources (excluding resolve targets) are shared across multiple render stages. A `VkuRenderStage` can be static (fixed resolution) or dynamic (resolution and format scale with the window).
+-Provides simple utilities for creating 2D textures `VkuTexture2D` and texture arrays `VkuTexture2DArray` from pixel data (uint8_t*).
+-Facilitates easy creation of descriptor sets `VkuDescriptorSet`, currently supporting `VkuSampler` (paired with a texture or texture array) and `VkuUniformBuffer`, while abstracting VkDescriptorSetLayout.
+-Each `VkuRenderStage` can have multiple `VkuPipeline` objects. A pipeline takes shaders, `VkuVertexLayout`, and various rendering options as input, while abstracting the VkPipelineLayout.
+-A frame is encapsulated within a `VkuFrame`, which manages the VkCommandBuffer. During the frame, render stages, pipelines, and other components can be bound, uniform buffers updated, and draw commands issued. All functions are wrapped with convenient VKU utilities.
+-Full **C++ compatibility** (yes, the C code is designed to be fully compatible with C++).
 
 ## ⬇️ Installation
-Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in your project. Remember to also compile the **vkutils.c** along the other files.
+Simply include the **vkutils.c** and **vkutils.h** files from the `src/` folder in your project. Make sure to compile vkutils.c along with the other source files in your project.
 
 ## 💻 Quick Start
-To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window. There are currently 3 modes for a VkuContext:
-- VKU_CONTEXT_USAGE_BASIC will create basic Vulkan objects. In future it can be used for offscreen rendering
-- VKU_CONTEXT_USAGE_PRESENTATION will not create Vulkan objects on VkuContext creation. When a presenter is created it will initialize them with the fitting requirements. Will support frame dependent compute.
-- VKU_CONTEXT_USAGE_COMPUTE is not implement yet, but will optimize the VkuContext for GPGPU offscreen applications.
+To quickly render something in the window, you need to create a VkuContext and a VkuPresenter. The VkuPresenter must be created **immediately** after the VkuContext, as it may reinitialize Vulkan objects to work seamlessly with the window.
+
+Currently, there are three modes for a VkuContext:
+- `VKU_CONTEXT_USAGE_BASIC`: Creates basic Vulkan objects. In the future, this mode can be used for offscreen rendering.
+- `VKU_CONTEXT_USAGE_PRESENTATION`: Does not create Vulkan objects during VkuContext initialization. Instead, Vulkan objects are initialized with the appropriate requirements when a VkuPresenter is created. This mode will support frame-dependent compute in the future.
+- `VKU_CONTEXT_USAGE_COMPUTE`: Not yet implemented, but will optimize the VkuContext for GPGPU offscreen applications.
 ```c
 VkuContextCreateInfo contextCreateInfo = {
     .enableValidation = VK_TRUE, //enables Vulkan Validation
@@ -37,7 +39,7 @@ VkuPresenterCreateInfo presenterCreateInfo = {
     .height = 720,
     .windowTitle = "VkuTest",
     .windowIconPath = "./resources/icon.png",
-    .presentMode = VK_PRESENT_MODE_FIFO_KHR, //VK_PRESENT_MODE_FIFO_KHR is like vsync else VK_PRESENT_MODE_FIFO_KHR is recommend (as fast a possible)
+    .presentMode = VK_PRESENT_MODE_FIFO_KHR, //VK_PRESENT_MODE_FIFO_KHR is like vsync else VK_PRESENT_MODE_FIFO_KHR is recommended (as fast a possible)
     .framesInFlight = 2, //procomputed frames by the cpu. Distributes cpu load evenly at the cost of latency
 };
 
@@ -48,7 +50,8 @@ VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
 vkuDestroyPresenter(presenter);
 vkuDestroyContext(context);
 ```
-The creation of other vulkan objects follow the same scheme. Its like predefining the rendering process and then only retrieven it in the renderloop. An example of a simple renderloop can look like this:
+The creation of other Vulkan objects follows the same pattern. It’s similar to predefining the rendering process and then simply retrieving and using it in the render loop.
+An example of a simple render loop might look like this:
 ```c
 while (!vkuWindowShouldClose(presenter->window))
 {
@@ -70,15 +73,15 @@ while (!vkuWindowShouldClose(presenter->window))
 ```
 
 ## 🔍 Examples
-Examples can be found at the **run/** folder along some shaders. These examples demonstrate basic and advanced usage of **VkUtils**.
+Examples can be found in the `run/` folder, along with some shaders. These examples demonstrate both basic and advanced usage of VkUtils.
 
 ## ⚠️ Considerations & Warnings
-- This library is not professional or excessively tested.
-- Im not a native english speaker, so there can be spelling mistakes.
-- This library is a by-product of making my own game and features can depend of the requirements of the game.
-- Im not a full time dev. At the moment im 19 years old and cannot ensure consistend development and activity on this project along side university.
+- This library is not professional-grade and has not been extensively tested.
+- I am not a native English speaker, so there might be spelling or grammar mistakes.
+- This library is a by-product of developing my own game, and its features may depend on the specific requirements of that project.
+- I am not a full-time developer. Currently, I am 19 years old and cannot guarantee consistent development or activity on this project alongside my university studies.
 
 ## 🏗️ Use in your Project
 - **MIT License**
-- A **mention** would be very nice. You can also use the icon of this project.
-- If you want, you can message me so I can see what cool projects you are working on.
+- A **mention** would be greatly appreciated. You are welcome to use the icon of this project as well.
+- Feel free to message me if you'd like to share the cool projects you’re working on—I’d love to see them!
