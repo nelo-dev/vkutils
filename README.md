@@ -17,7 +17,7 @@ This project is my attempt at creating a Vulkan API abstraction for C, as there 
 ## ⬇️ Installation
 Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in your project. Remember to also compile the **vkutils.c** along the other files.
 
-## Quick Start
+## 💻 Quick Start
 To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window. There are currently 3 modes for a VkuContext:
 - VKU_CONTEXT_USAGE_BASIC will create basic Vulkan objects. In future it can be used for offscreen rendering
 - VKU_CONTEXT_USAGE_PRESENTATION will not create Vulkan objects on VkuContext creation. When a presenter is created it will initialize them with the fitting requirements. Will support frame dependent compute.
@@ -69,7 +69,7 @@ while (!vkuWindowShouldClose(presenter->window))
 }
 ```
 
-## Examples
+## 🔍 Examples
 Examples can be found at the **run/** folder along some shaders. These examples demonstrate basic and advanced usage of **VkUtils**.
 
 ## ⚠️ Considerations & Warnings
