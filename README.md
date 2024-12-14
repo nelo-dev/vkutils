@@ -18,12 +18,15 @@ This project is my attempt at creating a Vulkan API abstraction for C, as there 
 Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in your project. Remember to also compile the **vkutils.c** along the other files.
 
 ## Quick Start
-To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window.
+To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window. There are currently 3 modes for a VkuContext:
+- VKU_CONTEXT_USAGE_BASIC will create basic Vulkan objects. In future it can be used for offscreen rendering
+- VKU_CONTEXT_USAGE_PRESENTATION will not create Vulkan objects on VkuContext creation. When a presenter is created it will initialize them with the fitting requirements. Will support frame dependent compute.
+- VKU_CONTEXT_USAGE_COMPUTE is not implement yet, but will optimize the VkuContext for GPGPU offscreen applications.
 ```c
 VkuContextCreateInfo contextCreateInfo = {
-    .enableValidation = VK_TRUE,
+    .enableValidation = VK_TRUE, //enables Vulkan Validation
     .applicationName = "VkuTest",
-    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+    .applicationVersion = VK_MAKE_VERSION(1, 0, 0), //your application version
     .usage = VKU_CONTEXT_USAGE_PRESENTATION};
 
 VkuContext context = vkuCreateContext(&contextCreateInfo);
@@ -34,8 +37,8 @@ VkuPresenterCreateInfo presenterCreateInfo = {
     .height = 720,
     .windowTitle = "VkuTest",
     .windowIconPath = "./resources/icon.png",
-    .presentMode = VK_PRESENT_MODE_FIFO_KHR,
-    .framesInFlight = 2,
+    .presentMode = VK_PRESENT_MODE_FIFO_KHR, //VK_PRESENT_MODE_FIFO_KHR is like vsync else VK_PRESENT_MODE_FIFO_KHR is recommend (as fast a possible)
+    .framesInFlight = 2, //procomputed frames by the cpu. Distributes cpu load evenly at the cost of latency
 };
 
 VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
