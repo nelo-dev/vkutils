@@ -48,6 +48,26 @@ VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
 vkuDestroyPresenter(presenter);
 vkuDestroyContext(context);
 ```
+The creation of other vulkan objects follow the same scheme. Its like predefining the rendering process and then only retrieven it in the renderloop. An example of a simple renderloop can look like this:
+```c
+while (!vkuWindowShouldClose(presenter->window))
+{
+    VkuFrame frame = vkuPresenterBeginFrame(presenter);
+    vkuFrameBeginRenderStage(frame, renderStage);
+    vkuFrameBindPipeline(frame, pipeline);
+
+    ubo ubo;
+    glm_perspective(glm_rad(60.0f), vkuWindowGetAspect(presenter->window), 0.1f, 10.0f, ubo.projection);
+    glm_lookat((vec3){2.0f, 0.0f, 0.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.001, 1.0f, 0.0f}, ubo.view);
+    glm_mat4_identity(ubo.model);
+    glm_rotate(ubo.model, 1.0f, (vec3){(float)sin(glfwGetTime()), (float)cos(glfwGetTime()), (float)sin(glfwGetTime())});
+    vkuFrameUpdateUniformBuffer(frame, uniformBuffer, (void *)&ubo);
+    vkuFrameDrawVertexBuffer(frame, vertexBuffer, 36);
+
+    vkuFrameFinishRenderStage(frame, renderStage);
+    vkuPresenterSubmitFrame(frame);
+}
+```
 
 ## Examples
 Examples can be found at the **run/** folder along some shaders. These examples demonstrate basic and advanced usage of **VkUtils**.
@@ -62,4 +82,3 @@ Examples can be found at the **run/** folder along some shaders. These examples 
 - **MIT License**
 - A **mention** would be very nice. You can also use the icon of this project.
 - If you want, you can message me so I can see what cool projects you are working on.
-10,0*e^(-3988*(1/(298,15)-1/(x+273,15)))
