@@ -19,7 +19,7 @@ Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in you
 
 ## Quick Start
 To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window.
-'''
+´´´
 VkuContextCreateInfo contextCreateInfo = {
     .enableValidation = VK_TRUE,
     .applicationName = "VkuTest",
@@ -44,7 +44,7 @@ VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
 
 vkuDestroyPresenter(presenter);
 vkuDestroyContext(context);
-'''
+´´´
 
 ## Examples
 Examples can be found at the **run/** folder along some shaders. These examples demonstrate basic and advanced usage of **VkUtils**.
