@@ -4,15 +4,15 @@
 This project is my attempt to create a Vulkan API abstraction for C, as there are not many libraries available for C developers. This abstraction significantly simplifies the use of Vulkan without compromising performance. It is designed for simple to medium-sized games or scientific applications.
 
 ## 📋 Features
--VkuContext abstracts key Vulkan objects like `VkInstance`, `VkDevice`, `VmaAllocator`, etc. It serves as the foundation for your program.
--The `VkuMemoryManager` uses AMD’s VMA (Vulkan Memory Allocator) to efficiently manage memory and handle the creation or destruction of `VkuBuffer` objects.
--The `VkuPresenter` manages the window and can be used as a render target. It encapsulates the VkSwapchainKHR and handles synchronization during rendering. It also recreates all necessary resources when the window is resized.
--A `VkuRenderStage` abstracts the management of a VkRenderPass along with its VkFramebuffer objects and associated resources (VkImage and VkImageView). When MSAA is enabled, render resources (excluding resolve targets) are shared across multiple render stages. A `VkuRenderStage` can be static (fixed resolution) or dynamic (resolution and format scale with the window).
--Provides simple utilities for creating 2D textures `VkuTexture2D` and texture arrays `VkuTexture2DArray` from pixel data (uint8_t*).
--Facilitates easy creation of descriptor sets `VkuDescriptorSet`, currently supporting `VkuSampler` (paired with a texture or texture array) and `VkuUniformBuffer`, while abstracting VkDescriptorSetLayout.
--Each `VkuRenderStage` can have multiple `VkuPipeline` objects. A pipeline takes shaders, `VkuVertexLayout`, and various rendering options as input, while abstracting the VkPipelineLayout.
--A frame is encapsulated within a `VkuFrame`, which manages the VkCommandBuffer. During the frame, render stages, pipelines, and other components can be bound, uniform buffers updated, and draw commands issued. All functions are wrapped with convenient VKU utilities.
--Full **C++ compatibility** (yes, the C code is designed to be fully compatible with C++).
+- VkuContext abstracts key Vulkan objects like `VkInstance`, `VkDevice`, `VmaAllocator`, etc. It serves as the foundation for your program.
+- The `VkuMemoryManager` uses AMD’s VMA (Vulkan Memory Allocator) to efficiently manage memory and handle the creation or destruction of `VkuBuffer` objects.
+- The `VkuPresenter` manages the window and can be used as a render target. It encapsulates the VkSwapchainKHR and handles synchronization during rendering. It also recreates all necessary resources when the window is resized.
+- A `VkuRenderStage` abstracts the management of a VkRenderPass along with its VkFramebuffer objects and associated resources (VkImage and VkImageView). When MSAA is enabled, render resources (excluding resolve targets) are shared across multiple render stages. A `VkuRenderStage` can be static (fixed resolution) or dynamic (resolution and format scale with the window).
+- Provides simple utilities for creating 2D textures `VkuTexture2D` and texture arrays `VkuTexture2DArray` from pixel data (uint8_t*).
+- Facilitates easy creation of descriptor sets `VkuDescriptorSet`, currently supporting `VkuSampler` (paired with a texture or texture array) and `VkuUniformBuffer`, while abstracting VkDescriptorSetLayout.
+- Each `VkuRenderStage` can have multiple `VkuPipeline` objects. A pipeline takes shaders, `VkuVertexLayout`, and various rendering options as input, while abstracting the VkPipelineLayout.
+- A frame is encapsulated within a `VkuFrame`, which manages the VkCommandBuffer. During the frame, render stages, pipelines, and other components can be bound, uniform buffers updated, and draw commands issued. All functions are wrapped with convenient VKU utilities.
+- Full **C++ compatibility** (yes, the C code is designed to be fully compatible with C++).
 
 ## ⬇️ Installation
 Simply include the **vkutils.c** and **vkutils.h** files from the `src/` folder in your project. Make sure to compile vkutils.c along with the other source files in your project.
