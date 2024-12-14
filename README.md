@@ -17,6 +17,38 @@ This project is my attempt at creating a Vulkan API abstraction for C, as there 
 ## ⬇️ Installation
 Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in your project. Remember to also compile the **vkutils.c** along the other files.
 
+## Quick Start
+To quickly get something draw into the window, a VkuContext and VkuPresenter have to be created. A VkuPresenter has to be created right after VkuContext, because it may reinitializes the Vulkan objects to work with the window.
+'''c 
+VkuContextCreateInfo contextCreateInfo = {
+    .enableValidation = VK_TRUE,
+    .applicationName = "VkuTest",
+    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+    .usage = VKU_CONTEXT_USAGE_PRESENTATION};
+
+VkuContext context = vkuCreateContext(&contextCreateInfo);
+
+VkuPresenterCreateInfo presenterCreateInfo = {
+    .context = context,
+    .width = 1152,
+    .height = 720,
+    .windowTitle = "VkuTest",
+    .windowIconPath = "./resources/icon.png",
+    .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+    .framesInFlight = 2,
+};
+
+VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
+
+// Creation of other Vku objects and renderloop
+
+vkuDestroyPresenter(presenter);
+vkuDestroyContext(context);
+'''
+
+## Examples
+Examples can be found at the **run/** folder along some shaders. These examples demonstrate basic and advanced usage of **VkUtils**.
+
 ## ⚠️ Considerations & Warnings
 - This library is not professional or excessively tested.
 - Im not a native english speaker, so there can be spelling mistakes.
@@ -27,3 +59,4 @@ Just include the **vkutils.c** & **vkutils.h** files from the src/ folder in you
 - **MIT License**
 - A **mention** would be very nice. You can also use the icon of this project.
 - If you want, you can message me so I can see what cool projects you are working on.
+10,0*e^(-3988*(1/(298,15)-1/(x+273,15)))
