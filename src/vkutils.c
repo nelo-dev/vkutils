@@ -3175,6 +3175,7 @@ void vkuDestroyRenderResourceManager(VkuRenderResourceManager resourceManager)
 
     free(resourceManager->colorResources);
     free(resourceManager->depthResources);
+    free(resourceManager->sampleFlags);
     free(resourceManager);
 }
 
@@ -4196,6 +4197,7 @@ void vkuDestroyDescriptorSet(VkuDescriptorSet set)
     vkuDestroyDescriptorSets(set->sets);
     vkuDestroyDescriptorPool(set->renderStage->context->device, set->pool);
     vkuDestroyDescriptorSetLayout(set->renderStage->context->device, set->setLayout);
+    free(set->attributes);
     free(set);
 }
 

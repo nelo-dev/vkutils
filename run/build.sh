@@ -11,7 +11,7 @@ glslc shader/staticpost.frag -o shader/staticpost_frag.spv
 g++ -Ofast -c ../lib/vk_mem_alloc/vk_mem_alloc.cpp -o ../lib/vk_mem_alloc/vk_mem_alloc_linux64.o
 
 # Compile basic cube program
-gcc -Og basic_cube.c -o vkuTestBasicCube ../lib/vk_mem_alloc/vk_mem_alloc_linux64.o ../src/vkutils.c -lstdc++ -lglfw -lm -lvulkan
+gcc -Og -g basic_cube.c -o vkuTestBasicCube ../lib/vk_mem_alloc/vk_mem_alloc_linux64.o ../src/vkutils.c -lstdc++ -lglfw -lm -lvulkan
 
 # Compile post-processing cube program
-gcc -Og postprocessing_cube.c -o vkuTestPostProcessingCube ../lib/vk_mem_alloc/vk_mem_alloc_linux64.o ../src/vkutils.c -lstdc++ -lglfw -lm -lvulkan
+gcc -Og -g postprocessing_cube.c -o vkuTestPostProcessingCube ../lib/vk_mem_alloc/vk_mem_alloc_linux64.o ../src/vkutils.c -lstdc++ -lglfw -lm -lvulkan
