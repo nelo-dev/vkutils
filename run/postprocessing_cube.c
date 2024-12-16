@@ -84,11 +84,11 @@ int main()
 
     VkuStaticRenderStageCreateInfo staticRenderStageCreateInfo = {
         .context = context,
-        .width = 288,
-        .height = 180,
+        .width = 144,
+        .height = 90,
         .options = VKU_RENDER_OPTION_COLOR_IMAGE | VKU_RENDER_OPTION_DEPTH_IMAGE,
         .enableDepthTesting = VK_TRUE,
-        .msaaSamples = vkuContextGetMaxSampleCount(context),
+        .msaaSamples = VK_SAMPLE_COUNT_1_BIT, // vkuContextGetMaxSampleCount(context),
     };
 
     VkuRenderStage renderStage = vkuCreateStaticRenderStage(&staticRenderStageCreateInfo);

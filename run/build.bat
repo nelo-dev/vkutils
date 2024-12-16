@@ -6,9 +6,9 @@ glslc.exe shader/post.vert -o shader/post_vert.spv
 glslc.exe shader/post.frag -o shader/post_frag.spv
 glslc.exe shader/staticpost.frag -o shader/staticpost_frag.spv
 
-g++ -Ofast -c ../lib/vk_mem_alloc/vk_mem_alloc.cpp -o ../lib/vk_mem_alloc/vk_mem_alloc_win64.o
-gcc -Og basic_cube.c -o vkuTestBasicCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
+REM g++ -Ofast -c ../lib/vk_mem_alloc/vk_mem_alloc.cpp -o ../lib/vk_mem_alloc/vk_mem_alloc_win64.o
+REM gcc -Og basic_cube.c -o vkuTestBasicCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
 REM vkuTestBasicCube.exe
 
 gcc -Og postprocessing_cube.c -o vkuTestPostProcessingCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
-REM vkuTestPostProcessingCube.exe
+vkuTestPostProcessingCube.exe

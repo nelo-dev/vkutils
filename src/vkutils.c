@@ -3272,10 +3272,39 @@ void vkuPresenterRecreate(VkuPresenter presenter)
     };
 
     presenter->swapchain = vkuCreateVkSwapchainKHR(&swapchainCreateInfo);
-
     presenter->swapchainImageViews = vkuCreateSwapchainImageViews(presenter->swapchainImageCount, presenter->swapchainImages, presenter->swapchainFormat, presenter->context->device);
 
     vkuRenderResourceManagerUpdate(presenter->resourceManager);
+
+    for (uint32_t i = 0; i < presenter->renderStageManager->elemCnt; i++)
+    {
+        vkuRenderStageUpdate((VkuRenderStage)presenter->renderStageManager->elements[i]);
+    }
+}
+
+void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR presentMode)
+{
+    vkDeviceWaitIdle(presenter->context->device);
+
+    presenter->presentMode = presentMode;
+
+    vkuDestroySwapchainImageViews(presenter->swapchainImageCount, presenter->swapchainImageViews, presenter->context->device);
+    vkuDestroyVkSwapchainKHR(presenter->swapchain, presenter->context->device, presenter->swapchainImages);
+
+    VkuVkSwapchainKHRCreateInfo swapchainCreateInfo = {
+        .physicalDevice = presenter->context->physicalDevice,
+        .device = presenter->context->device,
+        .surface = presenter->surface,
+        .glfwWindow = presenter->window->glfwWindow,
+        .presentMode = presenter->presentMode,
+        .pSwapchainImageCount = &presenter->swapchainImageCount,
+        .ppSwapchainImages = &presenter->swapchainImages,
+        .pSwapchainFormat = &presenter->swapchainFormat,
+        .pSwapchainExtent = &presenter->swapchainExtend,
+    };
+
+    presenter->swapchain = vkuCreateVkSwapchainKHR(&swapchainCreateInfo);
+    presenter->swapchainImageViews = vkuCreateSwapchainImageViews(presenter->swapchainImageCount, presenter->swapchainImages, presenter->swapchainFormat, presenter->context->device);
 
     for (uint32_t i = 0; i < presenter->renderStageManager->elemCnt; i++)
     {

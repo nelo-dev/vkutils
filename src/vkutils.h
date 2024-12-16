@@ -255,6 +255,7 @@ typedef struct VkuPresenter_T *VkuPresenter;
 VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo);
 void vkuDestroyPresenter(VkuPresenter presenter);
 uint32_t vkuPresenterGetFramesInFlight(VkuPresenter presenter);
+void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR presentMode);
 
 /**
  * A RenderStage is one step in the Frame. It includes RenderPass Framebuffer, renderTargets.
