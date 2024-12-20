@@ -145,6 +145,8 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
 void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager);
 void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count);
+void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
+void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 
 /**
  * @brief Creates Vku Context

@@ -2883,6 +2883,18 @@ void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *da
     vmaUnmapMemory(manager->allocator, buffer->allocation);
 }
 
+void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer)
+{
+    void *mapped_data = NULL;
+    vmaMapMemory(manager->allocator, buffer->allocation, &mapped_data);
+    return mapped_data;
+}
+
+void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer)
+{
+    vmaUnmapMemory(manager->allocator, buffer->allocation);
+}
+
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count)
 {
     uint32_t greater_than_null = 0;
