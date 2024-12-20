@@ -2857,20 +2857,23 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
     return buffer;
 };
 
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager)
+void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize)
 {
     if (buffer == NULL)
         return;
 
-    if (manager->fenceCount >= 0)
+    if (syncronize)
     {
-        vkWaitForFences(manager->device, manager->fenceCount, manager->fences, VK_TRUE, UINT64_MAX);
+        if (manager->fenceCount >= 0)
+        {
+            vkWaitForFences(manager->device, manager->fenceCount, manager->fences, VK_TRUE, UINT64_MAX);
+        }
+        else
+        {
+            vkDeviceWaitIdle(manager->device);
+        }
     }
-    else
-    {
-        vkDeviceWaitIdle(manager->device);
-    }
-
+    
     vmaDestroyBuffer(manager->allocator, buffer->buffer, buffer->allocation);
     free(buffer);
 }

@@ -142,7 +142,7 @@ typedef struct VkuBuffer_T
 typedef VkuBuffer_T *VkuBuffer;
 
 VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage);
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager);
+void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize);
 void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count);
 void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);

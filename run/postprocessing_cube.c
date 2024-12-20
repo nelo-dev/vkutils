@@ -80,7 +80,7 @@ int main()
     VkDeviceSize sizes[] = {sizeof(cubeVertices)};
     vkuCopyBuffer(context->memoryManager, &stagingBuffer, &vertexBuffer, sizes, 1);
 
-    vkuDestroyVertexBuffer(stagingBuffer, context->memoryManager);
+    vkuDestroyVertexBuffer(stagingBuffer, context->memoryManager, VK_TRUE);
 
     VkuStaticRenderStageCreateInfo staticRenderStageCreateInfo = {
         .context = context,
@@ -250,7 +250,7 @@ int main()
     vkuDestroyTextureSampler(context, sampler);
     vkuDestroyTexture2DArray(context, texArray);
     vkuDestroyStaticRenderStage(renderStage);
-    vkuDestroyVertexBuffer(vertexBuffer, context->memoryManager);
+    vkuDestroyVertexBuffer(vertexBuffer, context->memoryManager, VK_TRUE);
     vkuDestroyPresenter(presenter);
     vkuDestroyContext(context);
 
