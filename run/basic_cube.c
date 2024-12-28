@@ -83,7 +83,7 @@ int main()
     vkuDestroyVertexBuffer(stagingBuffer, context->memoryManager, VK_TRUE);
 
     VkuRenderStageCreateInfo renderStageCreateInfo = {
-        .msaaSamples = vkuContextGetMaxSampleCount(context),
+        .msaaSamples = VK_SAMPLE_COUNT_1_BIT,//vkuContextGetMaxSampleCount(context),
         .presenter = presenter,
         .options = VKU_RENDER_OPTION_PRESENTER,
         .enableDepthTesting = VK_TRUE};

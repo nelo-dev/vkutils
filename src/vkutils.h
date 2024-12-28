@@ -311,6 +311,7 @@ typedef VkuRenderStage_T *VkuRenderStage;
 
 VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo);
 void vkuDestroyRenderStage(VkuRenderStage renderStage);
+void vkuRenderStageSetMSAA(VkuRenderStage renderStage, VkSampleCountFlagBits msaaFlags);
 
 /**
  * A VkuStaticRenderStage is independent of a VkuPresenter and has a fixed resolution.

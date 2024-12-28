@@ -3858,6 +3858,17 @@ void vkuDestroyStaticRenderStage(VkuRenderStage renderStage)
     free(renderStage);
 }
 
+void vkuRenderStageSetMSAA(VkuRenderStage renderStage, VkSampleCountFlagBits msaaFlags)
+{
+    if (renderStage->staticRenderStage == VK_FALSE)
+    {
+        renderStage->sampleCount = msaaFlags;
+        vkuRenderStageUpdate(renderStage);
+    } else {
+        EXIT("VkuError: vkuRenderStageSetMSAA() cant be used with a static VkuRenderStage!\n");
+    }
+}
+
 // VkuFrame
 
 VkuFrame vkuPresenterBeginFrame(VkuPresenter presenter)
