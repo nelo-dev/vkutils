@@ -15,4 +15,4 @@ link(vkuTestBasicCube)
 link(vkuTestPostProcessingCube)
 
 file(COPY ${CMAKE_SOURCE_DIR}/run/resources 
-    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/resources)
+    DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/)
