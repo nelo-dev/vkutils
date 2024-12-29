@@ -1,5 +1,5 @@
 ![Logo](run/resources/icon_medium.png)
-![Discord Banner 1](https://discord.com/api/guilds/1322913633319256075/widget.png?style=banner1)
+[![Join the Discord Server](https://discordapp.com/api/guilds/1322913633319256075/widget.png?style=banner1)](https://discord.gg/at7fpRyqvA)
 # VkUtils
 ## 🕶️ Overview
 This project is my attempt to create a Vulkan API abstraction for C, as there are not many libraries available for C developers. This abstraction significantly simplifies the use of Vulkan without compromising performance. It is designed for simple to medium-sized games or scientific applications.
