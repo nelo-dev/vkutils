@@ -3327,6 +3327,11 @@ void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR present
     }
 }
 
+VkuWindow vkuPresenterGetWindow(VkuPresenter presenter)
+{
+    return presenter->window;
+}
+
 uint32_t vkuPresenterGetFramesInFlight(VkuPresenter presenter)
 {
     return presenter->framesInFlight;

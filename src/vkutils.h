@@ -258,6 +258,7 @@ VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo);
 void vkuDestroyPresenter(VkuPresenter presenter);
 uint32_t vkuPresenterGetFramesInFlight(VkuPresenter presenter);
 void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR presentMode);
+VkuWindow vkuPresenterGetWindow(VkuPresenter presenter);
 
 /**
  * A RenderStage is one step in the Frame. It includes RenderPass Framebuffer, renderTargets.

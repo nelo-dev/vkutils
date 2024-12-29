@@ -71,16 +71,19 @@ int main()
         .framesInFlight = 2,
     };
 
-    VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo);
+    VkuPresenter presenter = vkuCreatePresenter(&presenterCreateInfo); //Must be created immediately after context creation!
 
-    VkuBuffer stagingBuffer = vkuCreateVertexBuffer(context->memoryManager, sizeof(cubeVertices), VKU_BUFFER_USAGE_CPU_TO_GPU);
-    vkuSetVertexBufferData(context->memoryManager, stagingBuffer, cubeVertices, sizeof(cubeVertices));
+    VkuWindow window = vkuPresenterGetWindow(presenter);
+    VkuMemoryManager memoryManager = vkuContextGetMemoryManager(context); //Must be set AFTER vkuPresenter is created!
 
-    VkuBuffer vertexBuffer = vkuCreateVertexBuffer(context->memoryManager, sizeof(cubeVertices), VKU_BUFFER_USAGE_GPU_ONLY);
+    VkuBuffer stagingBuffer = vkuCreateVertexBuffer(memoryManager, sizeof(cubeVertices), VKU_BUFFER_USAGE_CPU_TO_GPU);
+    vkuSetVertexBufferData(memoryManager, stagingBuffer, cubeVertices, sizeof(cubeVertices));
+
+    VkuBuffer vertexBuffer = vkuCreateVertexBuffer(memoryManager, sizeof(cubeVertices), VKU_BUFFER_USAGE_GPU_ONLY);
     VkDeviceSize sizes[] = {sizeof(cubeVertices)};
-    vkuCopyBuffer(context->memoryManager, &stagingBuffer, &vertexBuffer, sizes, 1);
+    vkuCopyBuffer(memoryManager, &stagingBuffer, &vertexBuffer, sizes, 1);
 
-    vkuDestroyVertexBuffer(stagingBuffer, context->memoryManager, VK_TRUE);
+    vkuDestroyVertexBuffer(stagingBuffer, memoryManager, VK_TRUE);
 
     VkuStaticRenderStageCreateInfo staticRenderStageCreateInfo = {
         .context = context,
@@ -88,7 +91,7 @@ int main()
         .height = 180,
         .options = VKU_RENDER_OPTION_COLOR_IMAGE | VKU_RENDER_OPTION_DEPTH_IMAGE,
         .enableDepthTesting = VK_TRUE,
-        .msaaSamples = VK_SAMPLE_COUNT_1_BIT, // vkuContextGetMaxSampleCount(context),
+        .msaaSamples = vkuContextGetMaxSampleCount(context),
     };
 
     VkuRenderStage renderStage = vkuCreateStaticRenderStage(&staticRenderStageCreateInfo);
@@ -200,13 +203,13 @@ int main()
     free(ppPipelineInfo.fragmentShaderSpirV);
     free(ppPipelineInfo.vertexShaderSpirV);
 
-    printf("VRAM: %.2f MB!\n", (float)vkuMemoryMamgerGetAllocatedMemorySize(context->memoryManager) / 1000000.0f);
+    printf("VRAM: %.2f MB!\n", (float)vkuMemoryMamgerGetAllocatedMemorySize(memoryManager) / 1000000.0f);
 
     double previousTime = 0.0;
     double currentTime = 0.0;
     int frameCount = 0;
 
-    while (!vkuWindowShouldClose(presenter->window))
+    while (!vkuWindowShouldClose(window))
     {
         currentTime = glfwGetTime();
         frameCount++;
@@ -214,7 +217,7 @@ int main()
         if (currentTime - previousTime >= 1.0) {
             char title[256];
             snprintf(title, sizeof(title), "VkuTest - %d FPS", frameCount);
-            glfwSetWindowTitle(presenter->window->glfwWindow, title);
+            glfwSetWindowTitle(window->glfwWindow, title);
             frameCount = 0;
             previousTime = currentTime;
         }
@@ -224,7 +227,7 @@ int main()
         vkuFrameBindPipeline(frame, pipeline);
 
         ubo ubo;
-        glm_perspective(glm_rad(60.0f), vkuWindowGetAspect(presenter->window), 0.1f, 10.0f, ubo.projection);
+        glm_perspective(glm_rad(60.0f), vkuWindowGetAspect(window), 0.1f, 10.0f, ubo.projection);
         glm_lookat((vec3){2.0f, 0.0f, 0.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.001, 1.0f, 0.0f}, ubo.view);
         glm_mat4_identity(ubo.model);
         glm_rotate(ubo.model, 1.0f, (vec3){(float)sin(glfwGetTime()), (float)cos(glfwGetTime()), (float)sin(glfwGetTime())});
@@ -250,7 +253,7 @@ int main()
     vkuDestroyTextureSampler(context, sampler);
     vkuDestroyTexture2DArray(context, texArray);
     vkuDestroyStaticRenderStage(renderStage);
-    vkuDestroyVertexBuffer(vertexBuffer, context->memoryManager, VK_TRUE);
+    vkuDestroyVertexBuffer(vertexBuffer, memoryManager, VK_TRUE);
     vkuDestroyPresenter(presenter);
     vkuDestroyContext(context);
 
