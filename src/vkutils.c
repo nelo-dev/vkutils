@@ -4029,7 +4029,9 @@ void vkuFrameFinishRenderStage(VkuFrame frame, VkuRenderStage renderStage)
 void vkuFrameBindPipeline(VkuFrame frame, VkuPipeline pipeline)
 {
     vkCmdBindPipeline(frame->cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->graphicsPipeline);
-    vkCmdBindDescriptorSets(frame->cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipelineLayout, 0, 1, &(pipeline->descriptorSet->sets)[frame->presenter->currentFrame], 0, NULL);
+
+    if (pipeline->descriptorSet != NULL)
+        vkCmdBindDescriptorSets(frame->cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->pipelineLayout, 0, 1, &(pipeline->descriptorSet->sets)[frame->presenter->currentFrame], 0, NULL);
 }
 
 void vkuFramePipelinePushConstant(VkuFrame frame, VkuPipeline pipeline, void *data, size_t size)
