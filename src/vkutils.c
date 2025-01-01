@@ -4294,7 +4294,7 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
     pipeline->vertexLayout.attributes = pipeline->vertexAttributes;
     pipeline->vertexLayout.vertexSize = createInfo->vertexLayout.vertexSize;
 
-    pipeline->pipelineLayout = vkuCreatePipelineLayout(context->device, &createInfo->descriptorSet->setLayout, 1);
+    pipeline->pipelineLayout = vkuCreatePipelineLayout(context->device, &createInfo->descriptorSet->setLayout, (createInfo->descriptorSet != NULL) ? 1 : 0);
 
     VkuGraphicsPipelineCreateInfo pipelineCreateInfo = {
         .device = context->device,
