@@ -2681,6 +2681,92 @@ void vkuDestroyGraphicsPipeline(VkDevice device, VkPipeline pipeline)
 
 // External Function Predefines
 
+// VkuQueue
+
+VkuThreadSafeQueue vkuQueueCreate(size_t initial_capacity) {
+    if (initial_capacity == 0) {
+        initial_capacity = 1;
+    }
+
+    VkuThreadSafeQueue queue = (VkuThreadSafeQueue) malloc(sizeof(VkuThreadSafeQueue_T));
+    if (!queue) return NULL;
+
+    queue->data = malloc(initial_capacity * sizeof(void *));
+    if (!queue->data) {
+        free(queue);
+        return NULL;
+    }
+
+    queue->capacity = initial_capacity;
+    queue->front = 0;
+    queue->rear = 0;
+    queue->size = 0;
+
+    pthread_mutex_init(&queue->lock, NULL);
+
+    return queue;
+}
+
+void vkuQueueDestroy(VkuThreadSafeQueue queue) {
+    if (!queue) return;
+
+    pthread_mutex_destroy(&queue->lock);
+    free(queue->data);
+    free(queue);
+}
+
+static int vkuQueueResize(VkuThreadSafeQueue queue) {
+    size_t new_capacity = queue->capacity * 2;
+    void **new_data = realloc(queue->data, new_capacity * sizeof(void *));
+    if (!new_data) return -1;
+
+    if (queue->front > queue->rear) {
+        for (size_t i = 0; i < queue->front; ++i) {
+            new_data[i + queue->capacity] = queue->data[i];
+        }
+        queue->rear += queue->capacity;
+    }
+
+    queue->data = new_data;
+    queue->capacity = new_capacity;
+
+    return 0;
+}
+
+int vkuQueueEnqueue(VkuThreadSafeQueue queue, void *item) {
+    pthread_mutex_lock(&queue->lock);
+
+    if (queue->size == queue->capacity) {
+        if (vkuQueueResize(queue) != 0) {
+            pthread_mutex_unlock(&queue->lock);
+            return -1;
+        }
+    }
+
+    queue->data[queue->rear] = item;
+    queue->rear = (queue->rear + 1) % queue->capacity;
+    queue->size++;
+
+    pthread_mutex_unlock(&queue->lock);
+    return 0;
+}
+
+void *vkuQueueDequeue(VkuThreadSafeQueue queue) {
+    pthread_mutex_lock(&queue->lock);
+
+    if (queue->size == 0) {
+        pthread_mutex_unlock(&queue->lock);
+        return NULL;
+    }
+
+    void *item = queue->data[queue->front];
+    queue->front = (queue->front + 1) % queue->capacity;
+    queue->size--;
+
+    pthread_mutex_unlock(&queue->lock);
+    return item;
+}
+
 // VkuWindow
 
 uint8_t *vkuLoadImage(const char *path, int *width, int *height, int *channels)
@@ -2804,12 +2890,14 @@ VkuMemoryManager vkuCreateMemoryManager(VkuMemoryManagerCreateInfo *createInfo)
     manager->transferCmdPool = vkuCreateCmdPool(createInfo->physicalDevice, createInfo->device, (createInfo->transferQueue != VK_NULL_HANDLE) ? VK_TRUE : VK_FALSE);
     manager->fences = NULL;
     manager->fenceCount = 0;
+    manager->destructionQueue = vkuQueueCreate(128);
 
     return manager;
 }
 
 void vkuDestroyMemoryManager(VkuMemoryManager memoryManager)
 {
+    vkuQueueDestroy(memoryManager->destructionQueue);
     vkuDestroyVmaAllocator(memoryManager->allocator);
     vkuDestroyCommandPool(memoryManager->device, memoryManager->transferCmdPool);
     free(memoryManager);
@@ -2832,6 +2920,7 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
 {
     VkuBuffer_T *buffer = (VkuBuffer_T *)calloc(1, sizeof(VkuBuffer_T));
     buffer->size = size;
+    buffer->queuedForDestruction = ATOMIC_VAR_INIT(false);
 
     VkBufferCreateInfo bufferInfo = {};
     VmaAllocationCreateInfo allocInfo = {};
@@ -2876,6 +2965,26 @@ void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32
     
     vmaDestroyBuffer(manager->allocator, buffer->buffer, buffer->allocation);
     free(buffer);
+}
+
+void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer)
+{
+    if (!atomic_load(&buffer->queuedForDestruction)) {
+        atomic_store(&buffer->queuedForDestruction, true);
+        vkuQueueEnqueue(manager->destructionQueue, (void*) buffer);
+    }
+}
+
+void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager) 
+{
+    vkWaitForFences(manager->device, manager->fenceCount, manager->fences, VK_TRUE, UINT64_MAX);
+
+    VkuBuffer buffer;
+    while((buffer = vkuQueueDequeue(manager->destructionQueue)) != NULL)
+    {
+        vmaDestroyBuffer(manager->allocator, buffer->buffer, buffer->allocation);
+        free(buffer);
+    }
 }
 
 void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size)

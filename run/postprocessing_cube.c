@@ -253,7 +253,8 @@ int main()
     vkuDestroyTextureSampler(context, sampler);
     vkuDestroyTexture2DArray(context, texArray);
     vkuDestroyStaticRenderStage(renderStage);
-    vkuDestroyVertexBuffer(vertexBuffer, memoryManager, VK_TRUE);
+    vkuEnqueueBufferDestruction(memoryManager, vertexBuffer);
+    vkuDestroyBuffersInDestructionQueue(memoryManager);
     vkuDestroyPresenter(presenter);
     vkuDestroyContext(context);
 

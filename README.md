@@ -15,7 +15,8 @@ This project is my attempt to create a Vulkan API abstraction for C, as there ar
 - Facilitates easy creation of descriptor sets `VkuDescriptorSet`, currently supporting `VkuSampler` (paired with a texture or texture array) and `VkuUniformBuffer`, while abstracting VkDescriptorSetLayout.
 - Each `VkuRenderStage` can have multiple `VkuPipeline` objects. A pipeline takes shaders, `VkuVertexLayout`, and various rendering options as input, while abstracting the VkPipelineLayout.
 - A frame is encapsulated within a `VkuFrame`, which manages the VkCommandBuffer. During the frame, render stages, pipelines, and other components can be bound, uniform buffers updated, and draw commands issued. All functions are wrapped with convenient VKU utilities.
-- Full **C++ compatibility** (yes, the C code is designed to be fully compatible with C++).
+- Full **C++ compatibility** (yes, C code can be not fully compatible with C++).
+- **Async Buffer Destruction** Queue
 
 ## ⬇️ Installation
 Simply include the **vkutils.c** and **vkutils.h** files from the `src/` folder in your project. Make sure to compile vkutils.c along with the other source files in your project.

@@ -35,6 +35,8 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <stdbool.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include <cglm/cglm.h>
 #include <cglm/affine.h>
 
@@ -91,6 +93,24 @@ void vkuWindowToggleFullscreen(VkuWindow window);
 bool vkuWindowShouldClose(VkuWindow window);
 float vkuWindowGetAspect(VkuWindow window);
 
+/* A fast thread-safe fifo queue FIFO Queue, used in VkuBuffer destruction.*/
+
+typedef struct VkuThreadSafeQueue_T {
+    void **data;
+    size_t capacity;
+    size_t front;
+    size_t rear;
+    size_t size;
+    pthread_mutex_t lock;
+} VkuThreadSafeQueue_T;
+
+typedef VkuThreadSafeQueue_T * VkuThreadSafeQueue;
+
+VkuThreadSafeQueue vkuQueueCreate(size_t initial_capacity);
+void vkuQueueDestroy(VkuThreadSafeQueue queue);
+int vkuQueueEnqueue(VkuThreadSafeQueue queue, void *item);
+void *vkuQueueDequeue(VkuThreadSafeQueue queue);
+
 /**
  * @return Creates a MemoryManager. It is part of the Context but can be created seperately.
  * Memory simplifies Memory management and is used in context and presenter functions internally.
@@ -111,6 +131,7 @@ typedef struct VkuMemoryManager_T
     VkDevice device;
     VkCommandPool transferCmdPool;
     VkQueue transferQueue;
+    VkuThreadSafeQueue destructionQueue;
 
     VkFence *fences;
     uint32_t fenceCount;
@@ -137,16 +158,20 @@ typedef struct VkuBuffer_T
     VmaAllocation allocation;
     VkBuffer buffer;
     VkDeviceSize size;
+
+    atomic_bool queuedForDestruction;
 } VkuBuffer_T;
 
 typedef VkuBuffer_T *VkuBuffer;
 
 VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage);
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize);
+void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize); // Depericated. Use vkuEnqueueBufferDestruction() for async buffer destruction.
 void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count);
 void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
+void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer);
+void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager);
 
 /**
  * @brief Creates Vku Context
