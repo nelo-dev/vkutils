@@ -4389,6 +4389,7 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
     }
 
     memcpy(&pipeline->recreateInfo, createInfo, sizeof(VkuPipelineCreateInfo));
+
     pipeline->descriptorSet = createInfo->descriptorSet;
     pipeline->renderStage = createInfo->renderStage;
 
@@ -4445,7 +4446,7 @@ void vkuPipelineUpdate(VkuPipeline pipeline)
         .vertexShaderLength = pipeline->recreateInfo.vertexShaderLength,
         .fragmentShaderSpirv = pipeline->internalFragmentSpirv,
         .fragmentShaderLength = pipeline->recreateInfo.fragmentShaderLength,
-        .vertexInputLayout = pipeline->recreateInfo.vertexLayout,
+        .vertexInputLayout = pipeline->vertexLayout,
  
         .swapchainExtend = (pipeline->renderStage->staticRenderStage == VK_FALSE) ? pipeline->renderStage->presenter->swapchainExtend : pipeline->renderStage->extend,
         .polygonMode = pipeline->recreateInfo.polygonMode,
