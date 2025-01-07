@@ -2969,8 +2969,8 @@ void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32
 
 void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer)
 {
-    if (!atomic_load(buffer->queuedForDestruction)) {
-        atomic_store(buffer->queuedForDestruction, true);
+    if (!vku_atomic_load(buffer->queuedForDestruction)) {
+        vku_atomic_store(buffer->queuedForDestruction, true);
         vkuQueueEnqueue(manager->destructionQueue, (void*) buffer);
     }
 }

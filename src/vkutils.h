@@ -43,14 +43,14 @@
     #include <atomic>
     using vku_atomic_bool = std::atomic_bool;
 
-    #define atomic_load(object) (object.load())
-    #define atomic_store(object, value) (object.store(value))
+    #define vku_atomic_load(object) (object.load())
+    #define vku_atomic_store(object, value) (object.store(value))
 #else
     #include <stdatomic.h>
     typedef _Atomic(_Bool) vku_atomic_bool;
 
-    #define atomic_load(object) atomic_load(&(object))
-    #define atomic_store(object, value) atomic_store(&(object), value)
+    #define vku_atomic_load(object) atomic_load(&(object))
+    #define vku_atomic_store(object, value) atomic_store(&(object), value)
 #endif
 
 #define VKU_VALIDATION_LAYER_NAME "VK_LAYER_KHRONOS_validation"
