@@ -2691,7 +2691,7 @@ VkuThreadSafeQueue vkuQueueCreate(size_t initial_capacity) {
     VkuThreadSafeQueue queue = (VkuThreadSafeQueue) malloc(sizeof(VkuThreadSafeQueue_T));
     if (!queue) return NULL;
 
-    queue->data = malloc(initial_capacity * sizeof(void *));
+    queue->data = (void **) malloc(initial_capacity * sizeof(void *));
     if (!queue->data) {
         free(queue);
         return NULL;
@@ -2717,7 +2717,7 @@ void vkuQueueDestroy(VkuThreadSafeQueue queue) {
 
 static int vkuQueueResize(VkuThreadSafeQueue queue) {
     size_t new_capacity = queue->capacity * 2;
-    void **new_data = realloc(queue->data, new_capacity * sizeof(void *));
+    void **new_data = (void **) realloc(queue->data, new_capacity * sizeof(void *));
     if (!new_data) return -1;
 
     if (queue->front > queue->rear) {
@@ -2969,8 +2969,8 @@ void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32
 
 void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer)
 {
-    if (!atomic_load(&buffer->queuedForDestruction)) {
-        atomic_store(&buffer->queuedForDestruction, true);
+    if (!atomic_load(buffer->queuedForDestruction)) {
+        atomic_store(buffer->queuedForDestruction, true);
         vkuQueueEnqueue(manager->destructionQueue, (void*) buffer);
     }
 }
@@ -2983,7 +2983,7 @@ void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter 
         vkDeviceWaitIdle(manager->device);
 
     VkuBuffer buffer;
-    while((buffer = vkuQueueDequeue(manager->destructionQueue)) != NULL)
+    while((buffer = (VkuBuffer) vkuQueueDequeue(manager->destructionQueue)) != NULL)
     {
         vmaDestroyBuffer(manager->allocator, buffer->buffer, buffer->allocation);
         free(buffer);

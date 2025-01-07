@@ -36,9 +36,22 @@
 #include <GLFW/glfw3.h>
 #include <stdbool.h>
 #include <pthread.h>
-#include <stdatomic.h>
 #include <cglm/cglm.h>
 #include <cglm/affine.h>
+
+#ifdef __cplusplus
+    #include <atomic>
+    using vku_atomic_bool = std::atomic_bool;
+
+    #define atomic_load(object) (object.load())
+    #define atomic_store(object, value) (object.store(value))
+#else
+    #include <stdatomic.h>
+    typedef _Atomic(_Bool) vku_atomic_bool;
+
+    #define atomic_load(object) atomic_load(&(object))
+    #define atomic_store(object, value) atomic_store(&(object), value)
+#endif
 
 #define VKU_VALIDATION_LAYER_NAME "VK_LAYER_KHRONOS_validation"
 #define VKU_ENGINE_NAME "VKUTILS"
@@ -159,13 +172,13 @@ typedef struct VkuBuffer_T
     VkBuffer buffer;
     VkDeviceSize size;
 
-    atomic_bool queuedForDestruction;
+    vku_atomic_bool queuedForDestruction;
 } VkuBuffer_T;
 
 typedef VkuBuffer_T *VkuBuffer;
 
 VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage);
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize); // Depericated. Use vkuEnqueueBufferDestruction() for async buffer destruction.
+void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize); // Use vkuEnqueueBufferDestruction() for async buffer destruction.
 void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count);
 void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);

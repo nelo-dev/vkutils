@@ -10,5 +10,5 @@ g++ -Ofast -c ../lib/vk_mem_alloc/vk_mem_alloc.cpp -o ../lib/vk_mem_alloc/vk_mem
 REM gcc -Og basic_cube.c -o vkuTestBasicCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
 REM vkuTestBasicCube.exe
 
-gcc -Og postprocessing_cube.c -o vkuTestPostProcessingCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
+g++ -Og postprocessing_cube.c -o vkuTestPostProcessingCube ../lib/vk_mem_alloc/vk_mem_alloc_win64.o ../src/vkutils.c -lstdc++ -lglfw3 -lm -lvulkan-1
 vkuTestPostProcessingCube.exe
