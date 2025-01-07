@@ -2975,9 +2975,12 @@ void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer)
     }
 }
 
-void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager) 
+void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter syncPresenter) 
 {
-    vkWaitForFences(manager->device, manager->fenceCount, manager->fences, VK_TRUE, UINT64_MAX);
+    if (syncPresenter != VK_NULL_HANDLE)
+        vkWaitForFences(manager->device, manager->fenceCount, manager->fences, VK_TRUE, UINT64_MAX);
+    else
+        vkDeviceWaitIdle(manager->device);
 
     VkuBuffer buffer;
     while((buffer = vkuQueueDequeue(manager->destructionQueue)) != NULL)

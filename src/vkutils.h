@@ -171,7 +171,6 @@ void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *ds
 void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer);
-void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager);
 
 /**
  * @brief Creates Vku Context
@@ -284,6 +283,7 @@ void vkuDestroyPresenter(VkuPresenter presenter);
 uint32_t vkuPresenterGetFramesInFlight(VkuPresenter presenter);
 void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR presentMode);
 VkuWindow vkuPresenterGetWindow(VkuPresenter presenter);
+void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter syncPresenter);
 
 /**
  * A RenderStage is one step in the Frame. It includes RenderPass Framebuffer, renderTargets.

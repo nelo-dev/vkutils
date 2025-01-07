@@ -254,7 +254,7 @@ int main()
     vkuDestroyTexture2DArray(context, texArray);
     vkuDestroyStaticRenderStage(renderStage);
     vkuEnqueueBufferDestruction(memoryManager, vertexBuffer);
-    vkuDestroyBuffersInDestructionQueue(memoryManager);
+    vkuDestroyBuffersInDestructionQueue(memoryManager, presenter);
     vkuDestroyPresenter(presenter);
     vkuDestroyContext(context);
 
