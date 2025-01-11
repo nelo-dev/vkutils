@@ -2717,18 +2717,25 @@ void vkuQueueDestroy(VkuThreadSafeQueue queue) {
 
 static int vkuQueueResize(VkuThreadSafeQueue queue) {
     size_t new_capacity = queue->capacity * 2;
-    void **new_data = (void **) realloc(queue->data, new_capacity * sizeof(void *));
+    void **new_data = (void **) malloc(new_capacity * sizeof(void *));
     if (!new_data) return -1;
 
-    if (queue->front > queue->rear) {
-        for (size_t i = 0; i < queue->front; ++i) {
-            new_data[i + queue->capacity] = queue->data[i];
-        }
-        queue->rear += queue->capacity;
+    if (queue->front < queue->rear) {
+        // Elements are in a contiguous block
+        memcpy(new_data, &queue->data[queue->front], queue->size * sizeof(void *));
+    } else {
+        // Elements wrap around the end of the buffer
+        size_t first_part_size = queue->capacity - queue->front;
+        memcpy(new_data, &queue->data[queue->front], first_part_size * sizeof(void *));
+        memcpy(&new_data[first_part_size], queue->data, queue->rear * sizeof(void *));
     }
 
-    queue->data = new_data;
+    queue->front = 0;
+    queue->rear = queue->size;
     queue->capacity = new_capacity;
+
+    free(queue->data);
+    queue->data = new_data;
 
     return 0;
 }
