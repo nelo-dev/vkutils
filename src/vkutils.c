@@ -3595,8 +3595,8 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo)
 
 VkuTexture2D vkuRenderStageGetDepthOutput(VkuRenderStage renderStage)
 {
-    if ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE) != VKU_RENDER_OPTION_COLOR_IMAGE)
-        EXIT("VkuError: Color Texture cant be retrieved: RenderStage has no depth output!\n");
+    if ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) != VKU_RENDER_OPTION_DEPTH_IMAGE)
+        EXIT("VkuError: Depth Texture cant be retrieved: RenderStage has no depth output!\n");
 
     VkuTexture2D_T *tex = (VkuTexture2D_T *)calloc(1, sizeof(VkuTexture2D_T));
     tex->renderStage = renderStage;
@@ -3650,6 +3650,7 @@ void vkuDescriptorSetUpdate(VkuDescriptorSet descriptorSet);
 
 void vkuRenderStageUpdate(VkuRenderStage renderStage)
 {
+    vkDeviceWaitIdle(renderStage->context->device);
     vkuDestroyFramebuffer(renderStage->presenter->context->device, renderStage->framebuffers, renderStage->outputCount);
     vkuDestroyVkRenderPass(renderStage->presenter->context->device, renderStage->renderPass);
 
@@ -3756,19 +3757,14 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage)
 
     renderStage->framebuffers = vkuCreateVkFramebuffer(&frameBufferCreateInfo);
 
+    for (uint32_t i = 0; i < renderStage->outputTextureManager->elemCnt; i++)
+    {
+        vkuRenderStageOutputTextureUpdate((VkuTexture2D)renderStage->outputTextureManager->elements[i]);
+    }
+
     for (uint32_t i = 0; i < renderStage->pipelineManager->elemCnt; i++)
     {
         vkuPipelineUpdate((VkuPipeline)renderStage->pipelineManager->elements[i]);
-    }
-
-    for (uint32_t i = 0; i < renderStage->outputTextureManager->elemCnt; i++)
-    {
-        vkuRenderStageOutputTextureUpdate((VkuTexture2D)renderStage->outputTextureManager->elements[i]);
-    }
-
-    for (uint32_t i = 0; i < renderStage->outputTextureManager->elemCnt; i++)
-    {
-        vkuRenderStageOutputTextureUpdate((VkuTexture2D)renderStage->outputTextureManager->elements[i]);
     }
 
     for (uint32_t i = 0; i < renderStage->descriptorSetManager->elemCnt; i++)
@@ -3988,6 +3984,11 @@ void vkuRenderStageSetMSAA(VkuRenderStage renderStage, VkSampleCountFlagBits msa
     {
         renderStage->sampleCount = msaaFlags;
         vkuRenderStageUpdate(renderStage);
+
+        for (uint32_t i = 0; i < renderStage->presenter->renderStageManager->elemCnt; i++)
+        {
+            vkuRenderStageUpdate((VkuRenderStage) renderStage->presenter->renderStageManager->elements[i]);
+        }
     } else {
         EXIT("VkuError: vkuRenderStageSetMSAA() cant be used with a static VkuRenderStage!\n");
     }
