@@ -3780,6 +3780,12 @@ void vkuDestroyRenderStage(VkuRenderStage renderStage)
 
     vkDeviceWaitIdle(renderStage->presenter->context->device);
 
+    for (uint32_t i = 0; i < renderStage->outputTextureManager->elemCnt; i++)
+    {
+        VkuTexture2D outTex = (VkuTexture2D)renderStage->outputTextureManager->elements[i];
+        free(outTex);
+    }
+
     vkuDestroyObjectManager(renderStage->descriptorSetManager);
     vkuDestroyObjectManager(renderStage->outputTextureManager);
     vkuDestroyObjectManager(renderStage->pipelineManager);
