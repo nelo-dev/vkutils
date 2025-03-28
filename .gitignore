@@ -48,3 +48,10 @@
 
 # Precompiled shaders
 *.spv
+
+# Common build directories
+[Bb]in/*
+[Bb]uild/*
+[Oo]ut/*
+[Rr]esult/*
+[Tt]arget/*
