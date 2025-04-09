@@ -48,3 +48,6 @@
 
 # Precompiled shaders
 *.spv
+
+# Build Files
+build/

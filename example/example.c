@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "../src/vkutils.h"
+#include <vkutils/vkutils.h>
 
 typedef struct ubo {
     mat4 model;

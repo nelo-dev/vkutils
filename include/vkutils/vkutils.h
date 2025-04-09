@@ -31,7 +31,7 @@
 #ifndef VK_UTILS_H
 #define VK_UTILS_H
 
-#include "../lib/vk_mem_alloc/vk_mem_alloc.h"
+#include <vk_mem_alloc.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <stdbool.h>

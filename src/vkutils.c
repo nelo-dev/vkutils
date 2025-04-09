@@ -28,14 +28,14 @@
  *
  *****************************************************************************/
 
-#include "vkutils.h"
+#include <vkutils/vkutils.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 #include <stdbool.h>
 #define STB_IMAGE_IMPLEMENTATION
-#include "../lib/stb/stb_image.h"
+#include "../external/stb/stb_image.h"
 
 #define CLAMP(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
@@ -512,7 +512,7 @@ char *vkuReadFile(const char *filename, uint32_t *length)
     }
 
     size_t read_size = fread(buffer, 1, file_length, file);
-    if (read_size != file_length)
+    if (read_size != (size_t) file_length)
     {
         perror("Error reading file");
         free(buffer);
