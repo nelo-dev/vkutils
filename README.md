@@ -1,4 +1,4 @@
-![Logo](run/resources/icon_medium.png)
+![Logo](icon.png)
 # VkUtils
 ## 🕶️ Overview
 This project is my attempt to create a Vulkan API abstraction for C, as there are not many libraries available for C developers. This abstraction significantly simplifies the use of Vulkan without compromising performance. It is designed for simple to medium-sized games or scientific applications.
@@ -75,9 +75,6 @@ while (!vkuWindowShouldClose(presenter->window))
     vkuPresenterSubmitFrame(frame);
 }
 ```
-
-## 🔍 Examples
-Examples can be found in the `run/` folder, along with some shaders. These examples demonstrate both basic and advanced usage of VkUtils.
 
 ## ⚠️ Considerations & Warnings
 - This library is not professional-grade and has not been extensively tested.
