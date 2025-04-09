@@ -31,9 +31,10 @@
 #ifndef VK_UTILS_H
 #define VK_UTILS_H
 
+#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <cglm/cglm.h>
@@ -91,7 +92,7 @@ typedef struct VkuWindowCreateInfo
 
 typedef struct VkuWindow_t
 {
-    GLFWwindow *glfwWindow;
+    SDL_Window * sdlWindow;
     bool window_resized;
     bool fullscreen;
     int windowedX, windowedY;
@@ -103,7 +104,6 @@ typedef VkuWindow_T *VkuWindow;
 VkuWindow vkuCreateWindow(VkuWindowCreateInfo *createInfo);
 void vkuDestroyWindow(VkuWindow window);
 void vkuWindowToggleFullscreen(VkuWindow window);
-bool vkuWindowShouldClose(VkuWindow window);
 float vkuWindowGetAspect(VkuWindow window);
 
 /* A fast thread-safe fifo queue FIFO Queue, used in VkuBuffer destruction.*/

@@ -81,7 +81,7 @@ bool vkuCheckExtensionAvailable(uint32_t extension_count, char **extensions);
 VkInstance vkuCreateVkInstance(VkuVkInstanceCreateInfo *createInfo);
 void vkuDestroyVkInstance(VkInstance instance);
 
-VkSurfaceKHR vkuCreateSurface(VkInstance instance, GLFWwindow *glfwWindow);
+VkSurfaceKHR vkuCreateSurface(VkInstance instance, SDL_Window * sdlWindow);
 void vkuDestroySurface(VkSurfaceKHR surface, VkInstance instance);
 
 typedef struct VkuQueueFamilyIndices
@@ -206,7 +206,7 @@ typedef struct VkuVkSwapchainKHRCreateInfo
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     VkSurfaceKHR surface;
-    GLFWwindow *glfwWindow;
+    SDL_Window * sdlWindow;
     VkPresentModeKHR presentMode;
     uint32_t *pSwapchainImageCount;
     VkImage **ppSwapchainImages;
@@ -216,7 +216,7 @@ typedef struct VkuVkSwapchainKHRCreateInfo
 
 VkSurfaceFormatKHR vkuChooseSurfaceFormat(VkSurfaceFormatKHR *available_formats, uint32_t format_count);
 VkPresentModeKHR vkuChooseSwapPresentMode(VkPresentModeKHR *present_modes, uint32_t present_mode_count, VkPresentModeKHR requested_mode);
-VkExtent2D vkuChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, GLFWwindow *glfwWindow);
+VkExtent2D vkuChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, SDL_Window * sdlWindow);
 VkSwapchainKHR vkuCreateVkSwapchainKHR(VkuVkSwapchainKHRCreateInfo *createInfo);
 void vkuDestroyVkSwapchainKHR(VkSwapchainKHR swapchain, VkDevice device, VkImage *swapchain_images);
 VkPresentModeKHR vkuSelectPresentMode(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, VkPresentModeKHR requestedMode);
@@ -592,11 +592,11 @@ char **vkuGetRequiredInstanceExtensions(uint32_t *pExtensionCount)
     char **extensions = NULL;
     *pExtensionCount = 0;
 
-    uint32_t glfwExtensionCount = 0;
-    const char **glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    uint32_t sdlExtensionCount = 0;
+    const char **sdlExtensions = (const char **) SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount);
 
-    for (uint32_t i = 0; i < glfwExtensionCount; i++)
-        vkuAddStringToArray(&extensions, pExtensionCount, glfwExtensions[i]);
+    for (uint32_t i = 0; i < sdlExtensionCount; i++)
+        vkuAddStringToArray(&extensions, pExtensionCount, sdlExtensions[i]);
 
     vkuAddStringToArray(&extensions, pExtensionCount, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     vkuAddStringToArray(&extensions, pExtensionCount, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
@@ -736,10 +736,10 @@ void vkuDestroyVkInstance(VkInstance instance)
 
 // VkSurface
 
-VkSurfaceKHR vkuCreateSurface(VkInstance instance, GLFWwindow *glfwWindow)
+VkSurfaceKHR vkuCreateSurface(VkInstance instance, SDL_Window * sdlWindow)
 {
     VkSurfaceKHR surface = VK_NULL_HANDLE;
-    VK_CHECK(glfwCreateWindowSurface(instance, glfwWindow, NULL, &surface));
+    SDL_Vulkan_CreateSurface(sdlWindow, instance, NULL, &surface);
     return surface;
 }
 
@@ -1473,13 +1473,13 @@ VkPresentModeKHR vkuChooseSwapPresentMode(VkPresentModeKHR *present_modes, uint3
     return VK_PRESENT_MODE_IMMEDIATE_KHR;
 }
 
-VkExtent2D vkuChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, GLFWwindow *glfwWindow)
+VkExtent2D vkuChooseSwapExtent(VkSurfaceCapabilitiesKHR capabilities, SDL_Window * sdlWindow)
 {
     if (capabilities.currentExtent.width != UINT32_MAX)
         return capabilities.currentExtent;
 
     int width, height;
-    glfwGetFramebufferSize(glfwWindow, &width, &height);
+    SDL_GetWindowSizeInPixels(sdlWindow, &width, &height);
 
     VkExtent2D actual_extent = {
         .width = (uint32_t)width,
@@ -1499,7 +1499,7 @@ VkSwapchainKHR vkuCreateVkSwapchainKHR(VkuVkSwapchainKHRCreateInfo *createInfo)
 
     VkSurfaceFormatKHR surfaceFormat = vkuChooseSurfaceFormat(swapchain_details.formats, swapchain_details.formatsCount);
     VkPresentModeKHR presentMode = vkuChooseSwapPresentMode(swapchain_details.presentModes, swapchain_details.presentModesCount, createInfo->presentMode);
-    VkExtent2D extent = vkuChooseSwapExtent(swapchain_details.capabilities, createInfo->glfwWindow);
+    VkExtent2D extent = vkuChooseSwapExtent(swapchain_details.capabilities, createInfo->sdlWindow);
 
     (*createInfo->pSwapchainExtent) = extent;
     (*createInfo->pSwapchainFormat) = surfaceFormat.format;
@@ -2789,99 +2789,82 @@ uint8_t *vkuLoadImage(const char *path, int *width, int *height, int *channels)
     return data;
 }
 
-void framebuffer_size_callback(GLFWwindow *window, int width, int height)
-{
-    VkuWindow_T *vku_window = (VkuWindow_T *)glfwGetWindowUserPointer(window);
-    if (vku_window)
-        vku_window->window_resized = true;
+void framebuffer_size_callback(void *userdata, SDL_Event *event) {
+    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+        VkuWindow_T *vku_window = (VkuWindow_T *)userdata;
+        if (vku_window)
+            vku_window->window_resized = true;
+    }
 }
 
-VkuWindow vkuCreateWindow(VkuWindowCreateInfo *createInfo)
-{
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+static bool SDLCALL WindowEventFilter(void* userdata, SDL_Event* event) {
+    VkuWindow vkuWindow = (VkuWindow) userdata;
 
+    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+        vkuWindow->window_resized = true;
+    }
+
+    return true;
+}
+
+VkuWindow vkuCreateWindow(VkuWindowCreateInfo *createInfo) {
     VkuWindow_T *window = (VkuWindow_T *)calloc(1, sizeof(VkuWindow_T));
-    window->glfwWindow = glfwCreateWindow(createInfo->width, createInfo->height, createInfo->title, NULL, NULL);
 
-    glfwSetFramebufferSizeCallback(window->glfwWindow, framebuffer_size_callback);
-    glfwSetWindowUserPointer(window->glfwWindow, window);
+    window->sdlWindow = SDL_CreateWindow(createInfo->title, createInfo->width, createInfo->height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
 
-    if (createInfo->centered)
-    {
-        const GLFWvidmode *vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-        int xpos = (vidmode->width - createInfo->width) / 2;
-        int ypos = (vidmode->height - createInfo->height) / 2;
-        glfwSetWindowPos(window->glfwWindow, xpos, ypos);
+    if (!window->sdlWindow) {
+        free(window);
+        return NULL;
     }
 
-    if (createInfo->window_icon_path != NULL)
-    {
-        GLFWimage images[1];
-        int channels = 0;
-        images[0].pixels = vkuLoadImage(createInfo->window_icon_path, &images[0].width, &images[0].height, &channels);
+    SDL_GetWindowSizeInPixels(window->sdlWindow, &window->windowedWidth, &window->windowedHeight);
+    SDL_GetWindowPosition(window->sdlWindow, &window->windowedX, &window->windowedY);
 
-        glfwSetWindowIcon(window->glfwWindow, 1, images);
-        stbi_image_free(images[0].pixels);
+    if (createInfo->window_icon_path != NULL) {
+        int w, h, channels;
+        void *pixels = vkuLoadImage(createInfo->window_icon_path, &w, &h, &channels); // Your custom loader
+        if (pixels) {
+            SDL_Surface *icon = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_RGBA32, pixels, 4*w);
+            SDL_SetWindowIcon(window->sdlWindow, icon);
+            SDL_DestroySurface(icon);
+            stbi_image_free(pixels);
+        }
     }
 
-    glfwGetWindowSize(window->glfwWindow, &window->windowedWidth, &window->windowedHeight);
-    glfwGetWindowPos(window->glfwWindow, &window->windowedX, &window->windowedY);
+    SDL_AddEventWatch(WindowEventFilter, window);
 
     return window;
 }
 
-void vkuWindowToggleFullscreen(VkuWindow window)
-{
-    GLFWmonitor *monitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode *mode = glfwGetVideoMode(monitor);
-
-    if (glfwGetWindowMonitor(window->glfwWindow) == NULL)
-    {
-        glfwGetWindowPos(window->glfwWindow, &window->windowedX, &window->windowedY);
-        glfwGetWindowSize(window->glfwWindow, &window->windowedWidth, &window->windowedHeight);
-
-        glfwSetWindowMonitor(window->glfwWindow, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+void vkuWindowToggleFullscreen(VkuWindow window) {
+    if (!window->fullscreen) {
+        SDL_GetWindowPosition(window->sdlWindow, &window->windowedX, &window->windowedY);
+        SDL_GetWindowSizeInPixels(window->sdlWindow, &window->windowedWidth, &window->windowedHeight);
+        SDL_SetWindowFullscreen(window->sdlWindow, SDL_WINDOW_FULLSCREEN);
         window->fullscreen = true;
-    }
-    else
-    {
-        glfwSetWindowMonitor(window->glfwWindow, NULL, window->windowedX, window->windowedY, window->windowedWidth, window->windowedHeight, 0);
+    } else {
+        SDL_SetWindowFullscreen(window->sdlWindow, 0);
+        SDL_SetWindowPosition(window->sdlWindow, window->windowedX, window->windowedY);
+        SDL_SetWindowSize(window->sdlWindow, window->windowedWidth, window->windowedHeight);
         window->fullscreen = false;
     }
 }
 
-bool vkuWindowShouldClose(VkuWindow window)
-{
-    return glfwWindowShouldClose(window->glfwWindow);
+void vkuWindowToggleInputMode(VkuWindow window) {
+    SDL_Window *win = window->sdlWindow;
+    int isRelative = SDL_GetWindowRelativeMouseMode(window->sdlWindow);
+    SDL_SetWindowRelativeMouseMode(window->sdlWindow, !isRelative);
 }
 
-void vkuWindowToggleInputMode(VkuWindow window)
-{
-    int currentMode = glfwGetInputMode(window->glfwWindow, GLFW_CURSOR);
-    if (currentMode == GLFW_CURSOR_DISABLED)
-    {
-        glfwSetInputMode(window->glfwWindow, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-    }
-    else
-    {
-        glfwSetInputMode(window->glfwWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    }
-}
-
-float vkuWindowGetAspect(VkuWindow window)
-{
+float vkuWindowGetAspect(VkuWindow window) {
     int width, height;
-    glfwGetWindowSize(window->glfwWindow, &width, &height);
-
+    SDL_GetWindowSize(window->sdlWindow, &width, &height);
     return (float)width / (float)height;
 }
 
-void vkuDestroyWindow(VkuWindow window)
-{
-    if (window)
-    {
-        glfwDestroyWindow(window->glfwWindow);
+void vkuDestroyWindow(VkuWindow window) {
+    if (window) {
+        SDL_DestroyWindow(window->sdlWindow);
         free(window);
     }
 }
@@ -3070,8 +3053,6 @@ void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *ds
 
 VkuContext vkuCreateContext(VkuContextCreateInfo *createInfo)
 {
-    if (!glfwInit())
-        EXIT("GLFW init failed!\n");
 
     VkuContext_T *context = (VkuContext_T *)calloc(1, sizeof(VkuContext_T));
     context->validation = createInfo->enableValidation;
@@ -3138,7 +3119,6 @@ void vkuDestroyContext(VkuContext context)
     }
 
     free(context);
-    glfwTerminate();
 }
 
 VkSampleCountFlagBits vkuContextGetMaxSampleCount(VkuContext context)
@@ -3330,7 +3310,9 @@ VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo)
 
     presenter->window = vkuCreateWindow(&windowCreateInfo);
 
-    presenter->surface = vkuCreateSurface(createInfo->context->instance, presenter->window->glfwWindow);
+    printf("%s", SDL_GetError());
+
+    presenter->surface = vkuCreateSurface(createInfo->context->instance, presenter->window->sdlWindow);
     vkuContextPhysicalDeviceWithSurfaceSupport(createInfo->context, presenter->surface);
 
     presenter->presentMode = createInfo->presentMode;
@@ -3339,7 +3321,7 @@ VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo)
         .physicalDevice = createInfo->context->physicalDevice,
         .device = createInfo->context->device,
         .surface = presenter->surface,
-        .glfwWindow = presenter->window->glfwWindow,
+        .sdlWindow = presenter->window->sdlWindow,
         .presentMode = presenter->presentMode,
         .pSwapchainImageCount = &presenter->swapchainImageCount,
         .ppSwapchainImages = &presenter->swapchainImages,
@@ -3378,11 +3360,12 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage);
 void vkuPresenterRecreate(VkuPresenter presenter)
 {
     int width = 0, height = 0;
-    glfwGetFramebufferSize(presenter->window->glfwWindow, &width, &height);
+
+    SDL_GetWindowSizeInPixels(presenter->window->sdlWindow, &width, &height);
     while (width == 0 || height == 0)
     {
-        glfwGetFramebufferSize(presenter->window->glfwWindow, &width, &height);
-        glfwWaitEvents();
+        SDL_GetWindowSizeInPixels(presenter->window->sdlWindow, &width, &height);
+        SDL_WaitEvent(NULL); // Wait for a resize or focus event
     }
 
     // Cleanup
@@ -3397,7 +3380,7 @@ void vkuPresenterRecreate(VkuPresenter presenter)
         .physicalDevice = presenter->context->physicalDevice,
         .device = presenter->context->device,
         .surface = presenter->surface,
-        .glfwWindow = presenter->window->glfwWindow,
+        .sdlWindow = presenter->window->sdlWindow,
         .presentMode = presenter->presentMode,
         .pSwapchainImageCount = &presenter->swapchainImageCount,
         .ppSwapchainImages = &presenter->swapchainImages,
@@ -3429,7 +3412,7 @@ void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR present
         .physicalDevice = presenter->context->physicalDevice,
         .device = presenter->context->device,
         .surface = presenter->surface,
-        .glfwWindow = presenter->window->glfwWindow,
+        .sdlWindow = presenter->window->sdlWindow,
         .presentMode = presenter->presentMode,
         .pSwapchainImageCount = &presenter->swapchainImageCount,
         .ppSwapchainImages = &presenter->swapchainImages,
@@ -4010,8 +3993,6 @@ VkuFrame vkuPresenterBeginFrame(VkuPresenter presenter)
         presenter->activeFrame = VK_TRUE;
 
     VkuFrame_T *frame = (VkuFrame_T *)calloc(1, sizeof(VkuFrame_T));
-
-    glfwPollEvents();
 
     frame->presenter = presenter;
 

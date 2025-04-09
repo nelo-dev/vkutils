@@ -53,6 +53,9 @@ float cubeVertices[] = {
 
 int main()
 {
+    if (!SDL_Init(SDL_INIT_VIDEO))
+        EXIT("SDL3 init failed!\n");
+
     VkuContextCreateInfo contextCreateInfo = {
         .enableValidation = VK_TRUE,
         .applicationName = "VkuTest",
@@ -205,22 +208,29 @@ int main()
 
     printf("VRAM: %.2f MB!\n", (float)vkuMemoryMamgerGetAllocatedMemorySize(memoryManager) / 1000000.0f);
 
-    double previousTime = 0.0;
-    double currentTime = 0.0;
-    int frameCount = 0;
+    SDL_Event event;
+    bool running = true;
 
-    while (!vkuWindowShouldClose(window))
+    while (running)
     {
-        currentTime = glfwGetTime();
-        frameCount++;
-
-        if (currentTime - previousTime >= 1.0) {
-            char title[256];
-            snprintf(title, sizeof(title), "VkuTest - %d FPS", frameCount);
-            glfwSetWindowTitle(window->glfwWindow, title);
-            frameCount = 0;
-            previousTime = currentTime;
+        // Handle SDL events
+        while (SDL_PollEvent(&event))
+        {
+            switch (event.type)
+            {
+                case SDL_EVENT_QUIT:
+                    running = false;
+                    break;
+                case SDL_EVENT_KEY_DOWN:
+                    if (event.key.scancode == SDL_SCANCODE_F11) {
+                        vkuWindowToggleFullscreen(window);
+                    }
+                default:
+                    break;
+            }
         }
+
+        float currentTime = (float) SDL_GetTicks() / 1000.0f;
 
         VkuFrame frame = vkuPresenterBeginFrame(presenter);
         vkuFrameBeginRenderStage(frame, renderStage);
@@ -230,7 +240,7 @@ int main()
         glm_perspective(glm_rad(60.0f), vkuWindowGetAspect(window), 0.1f, 10.0f, ubo.projection);
         glm_lookat((vec3){2.0f, 0.0f, 0.0f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.001, 1.0f, 0.0f}, ubo.view);
         glm_mat4_identity(ubo.model);
-        glm_rotate(ubo.model, 1.0f, (vec3){(float)sin(glfwGetTime()), (float)cos(glfwGetTime()), (float)sin(glfwGetTime())});
+        glm_rotate(ubo.model, 1.0f, (vec3){(float)sin(currentTime), (float)cos(currentTime), (float)sin(currentTime)});
         vkuFrameUpdateUniformBuffer(frame, uniformBuffer, (void *)&ubo);
         vkuFrameDrawVertexBuffer(frame, vertexBuffer, 36);
 
@@ -257,6 +267,7 @@ int main()
     vkuDestroyBuffersInDestructionQueue(memoryManager, presenter);
     vkuDestroyPresenter(presenter);
     vkuDestroyContext(context);
+    SDL_Quit();
 
     printf("Terminated!\n");
     return 0;
