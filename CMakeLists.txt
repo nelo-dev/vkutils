@@ -33,6 +33,3 @@ target_link_libraries(vkutils
 
 # Set output directory for executables
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
-# Add examples subdirectory
-add_subdirectory(example)
