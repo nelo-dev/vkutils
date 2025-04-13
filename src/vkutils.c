@@ -2800,7 +2800,9 @@ void framebuffer_size_callback(void *userdata, SDL_Event *event) {
 static bool SDLCALL WindowEventFilter(void* userdata, SDL_Event* event) {
     VkuWindow vkuWindow = (VkuWindow) userdata;
 
-    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+    if (event->type == SDL_EVENT_WINDOW_MINIMIZED) {
+        vkuWindow->minimized = true;
+    } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
         vkuWindow->window_resized = true;
     }
 
@@ -3360,12 +3362,17 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage);
 void vkuPresenterRecreate(VkuPresenter presenter)
 {
     int width = 0, height = 0;
-
     SDL_GetWindowSizeInPixels(presenter->window->sdlWindow, &width, &height);
-    while (width == 0 || height == 0)
-    {
-        SDL_GetWindowSizeInPixels(presenter->window->sdlWindow, &width, &height);
-        SDL_WaitEvent(NULL); // Wait for a resize or focus event
+
+    SDL_Event event;
+    while (presenter->window->minimized || width == 0 || height == 0) {
+        if (SDL_WaitEvent(&event)) {
+            if (event.type == SDL_EVENT_WINDOW_RESTORED) {
+                presenter->window->minimized = false;
+            } else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+                SDL_GetWindowSizeInPixels(presenter->window->sdlWindow, &width, &height);
+            }
+        }
     }
 
     // Cleanup
@@ -3375,7 +3382,6 @@ void vkuPresenterRecreate(VkuPresenter presenter)
     vkuDestroyVkSwapchainKHR(presenter->swapchain, presenter->context->device, presenter->swapchainImages);
 
     // Creation
-
     VkuVkSwapchainKHRCreateInfo swapchainCreateInfo = {
         .physicalDevice = presenter->context->physicalDevice,
         .device = presenter->context->device,

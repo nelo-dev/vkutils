@@ -28,6 +28,13 @@
  *
  *****************************************************************************/
 
+/**
+ * @file vkutils.h
+ * @brief Vulkan abstraction library for C.
+ * @author Nelo
+ * @version 1.0
+ */
+
 #ifndef VK_UTILS_H
 #define VK_UTILS_H
 
@@ -77,11 +84,6 @@
         exit(EXIT_FAILURE);                    \
     } while (0)
 
-/**
- * @brief Create a VkuWindow. Is automatically created with a presenter.
- * A VkuWindow contains a glfwWindow and other parameters to keep track of window size, aspect, fullscreen, etc.
- */
-
 typedef struct VkuWindowCreateInfo
 {
     int32_t width, height;
@@ -94,6 +96,7 @@ typedef struct VkuWindow_t
 {
     SDL_Window * sdlWindow;
     bool window_resized;
+    bool minimized;
     bool fullscreen;
     int windowedX, windowedY;
     int windowedWidth, windowedHeight;
@@ -101,12 +104,44 @@ typedef struct VkuWindow_t
 
 typedef VkuWindow_T *VkuWindow;
 
-VkuWindow vkuCreateWindow(VkuWindowCreateInfo *createInfo);
-void vkuDestroyWindow(VkuWindow window);
-void vkuWindowToggleFullscreen(VkuWindow window);
-float vkuWindowGetAspect(VkuWindow window);
+/**
+ * @brief Creates a window. 
+ * 
+ * The VkuWindow struct contains a SDL3 window handle alongside other constants for internal handling,
+ * such as window resized variable signaling recreation of vulkan resources.
+ * 
+ * WARNING: While creating a VkuPresenter a window is created automatically.
+ * @param createInfo Ptr to a VkuWindowCreateInfo struct.
+ * @return A Vku Window.
+ */
 
-/* A fast thread-safe fifo queue FIFO Queue, used in VkuBuffer destruction.*/
+VkuWindow vkuCreateWindow(VkuWindowCreateInfo *createInfo);
+
+/**
+ * @brief Destroys a window.
+ * 
+ * WARNING: Presenter destruction also clears up window resources.
+ * @param window A VkuWindow
+ */
+
+void vkuDestroyWindow(VkuWindow window);
+
+/**
+ * @brief Toggles fullscreen mode of a window
+ * 
+ * @param window VkuWindow.
+ */
+
+void vkuWindowToggleFullscreen(VkuWindow window);
+
+/**
+ * @brief Get the aspect-ratio of a window.
+ * Returns return width / height as float value.
+ * 
+ * @param window VkuWindow.
+ */
+
+float vkuWindowGetAspect(VkuWindow window);
 
 typedef struct VkuThreadSafeQueue_T {
     void **data;
@@ -119,15 +154,43 @@ typedef struct VkuThreadSafeQueue_T {
 
 typedef VkuThreadSafeQueue_T * VkuThreadSafeQueue;
 
+/**
+ * @brief A thread-safe FifoQueue
+ * Originally an internal data struct for enqueueing buffers for destruction. May be useful.ABC
+ * 
+ * @param initial_capacity The initial queue capacity. To increase performance (avoid realloc) set this value to proper value.ABC
+ * @return A VkuThreadSafeQueue handle.
+ */
+
 VkuThreadSafeQueue vkuQueueCreate(size_t initial_capacity);
-void vkuQueueDestroy(VkuThreadSafeQueue queue);
-int vkuQueueEnqueue(VkuThreadSafeQueue queue, void *item);
-void *vkuQueueDequeue(VkuThreadSafeQueue queue);
 
 /**
- * @return Creates a MemoryManager. It is part of the Context but can be created seperately.
- * Memory simplifies Memory management and is used in context and presenter functions internally.
+ * @brief Destroy a VkuThreadSafeQueue
+ * 
+ * @param queue A VkuThreadSafeQueue.
  */
+
+void vkuQueueDestroy(VkuThreadSafeQueue queue);
+
+/**
+ * @brief Function to enqueue a PTR to an item to the queue.ABC
+ * 
+ * WARNING: This function only enqueues an 8byte PTR value!
+ * @param queue VkuThreadSafeQueue. 
+ * @param item PTR to an item. 
+ * @return Returns 0 on success and -1 on failure.
+ */
+
+int vkuQueueEnqueue(VkuThreadSafeQueue queue, void *item);
+
+/**
+ * @brief Dequeue an item from a VkuThreadSafeQueue
+ * 
+ * @param queue A VkuThreadSafeQueue. 
+ * @return returns a PTR to the next item based on FIFO scheme.
+ */
+
+void *vkuQueueDequeue(VkuThreadSafeQueue queue);
 
 typedef struct VkuMemoryManagerCreateInfo
 {
@@ -152,13 +215,36 @@ typedef struct VkuMemoryManager_T
 
 typedef VkuMemoryManager_T *VkuMemoryManager;
 
+/**
+ * @brief Creates a MemoryManager
+ * 
+ * WARNING: A MemoryManager is already created upon VkuContext creation. You should retrieve the manager from context.
+ * 
+ * A VkuMemoryManager manages vulkan resources and can be used to create / destroy buffers. 
+ * It handles syncronization and supports dedicated transfer queues.
+ * 
+ * @param createInfo PTR to VkuMemoryManagerCreateInfo struct.
+ * @return A VkuMemoryManager.
+ */
+
 VkuMemoryManager vkuCreateMemoryManager(VkuMemoryManagerCreateInfo *createInfo);
-void vkuDestroyMemoryManager(VkuMemoryManager memoryManager);
-VkDeviceSize vkuMemoryMamgerGetAllocatedMemorySize(VkuMemoryManager manager);
 
 /**
- * @return a vkuBuffer
+ * @brief Destroys VkuMemoryManager
+ * 
+ * @param memoryManager VkuMemoryManager
  */
+
+void vkuDestroyMemoryManager(VkuMemoryManager memoryManager);
+
+/**
+ * @brief Get complete allocated size of buffers, etc.
+ * 
+ * @param manager A VkuMemoryManager.
+ * @return Number of bytes allocated.
+ */
+
+VkDeviceSize vkuMemoryMamgerGetAllocatedMemorySize(VkuMemoryManager manager);
 
 typedef enum VkuBufferUsage
 {
@@ -184,12 +270,6 @@ void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *ds
 void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer);
-
-/**
- * @brief Creates Vku Context
- * Creates the basic Vulkan Ultities Context, holds basic Vulkan objects like VkInstance, VkDevice, etc.
- * @return Returns a VkuContext that can be used for further object creation, etc.
- */
 
 typedef enum vkuContextUsageFlags
 {
@@ -231,11 +311,6 @@ VkuContext vkuCreateContext(VkuContextCreateInfo *createInfo);
 void vkuDestroyContext(VkuContext context);
 VkSampleCountFlagBits vkuContextGetMaxSampleCount(VkuContext context);
 VkuMemoryManager vkuContextGetMemoryManager(VkuContext context);
-
-/**
- * @returns a VkuPresenter which handles presentation.
- * ATTENTION! Has to be created right after Context!
- */
 
 typedef struct VkuPresenter_T *VkuPresenter;
 typedef struct VkuColorResource_T *VkuColorResource;
@@ -298,11 +373,6 @@ void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR present
 VkuWindow vkuPresenterGetWindow(VkuPresenter presenter);
 void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter syncPresenter);
 
-/**
- * A RenderStage is one step in the Frame. It includes RenderPass Framebuffer, renderTargets.
- * It can render to the swapchain or to internal Images that can be retrieved as Texture.
- */
-
 typedef enum VkuRenderOptions
 {
     VKU_RENDER_OPTION_COLOR_IMAGE = (1 << 0),
@@ -352,11 +422,6 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo);
 void vkuDestroyRenderStage(VkuRenderStage renderStage);
 void vkuRenderStageSetMSAA(VkuRenderStage renderStage, VkSampleCountFlagBits msaaFlags);
 
-/**
- * A VkuStaticRenderStage is independent of a VkuPresenter and has a fixed resolution.
- * That means nothing gets recreated when window resize & you cant render into Swapchain (only texture output)
- */
-
 typedef struct VkuStaticRenderStageCreateInfo {
     VkuContext context;
     uint32_t width, height;
@@ -367,10 +432,6 @@ typedef struct VkuStaticRenderStageCreateInfo {
 
 VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * createInfo);
 void vkuDestroyStaticRenderStage(VkuRenderStage renderStage);
-
-/**
- * Presenter functions for render tasks in a frame.
- */
 
 typedef struct VkuFrame_T
 {
@@ -389,9 +450,6 @@ void vkuFrameBeginRenderStage(VkuFrame frame, VkuRenderStage renderStage);
 void vkuFrameFinishRenderStage(VkuFrame frame, VkuRenderStage renderStage);
 void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount);
 void vkuFrameDrawVoid(VkuFrame frame, uint64_t vertexCount);
-/**
- * Textures
- */
 
 typedef struct VkuTexture2DCreateInfo
 {
@@ -443,8 +501,6 @@ void vkuDestroyTexture2D(VkuContext context, VkuTexture2D texture);
 VkuTexture2D vkuRenderStageGetDepthOutput(VkuRenderStage renderStage);
 VkuTexture2D vkuRenderStageGetColorOutput(VkuRenderStage renderStage);
 
-// VkuSampler
-
 typedef struct VkuTextureSamplerCreateInfo
 {
     VkFilter minFilter;
@@ -463,10 +519,6 @@ typedef VkuTextureSampler_T *VkuTextureSampler;
 VkuTextureSampler vkuCreateTextureSampler(VkuContext context, VkuTextureSamplerCreateInfo *createInfo);
 void vkuDestroyTextureSampler(VkuContext context, VkuTextureSampler sampler);
 
-/**
- * @return VkuUniform Buffer. The bufferCount have to match the FramesInFlight of the Presenter!
- */
-
 typedef struct VkuUniformBuffer_T
 {
     void **mappedMemory;
@@ -481,10 +533,6 @@ typedef VkuUniformBuffer_T *VkuUniformBuffer;
 VkuUniformBuffer vkuCreateUniformBuffer(VkuContext context, VkDeviceSize bufferSize, uint32_t count);
 void vkuDestroyUniformBuffer(VkuContext context, VkuUniformBuffer uniformBuffer);
 void vkuFrameUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data);
-
-/**
- * DescriptorSet
- */
 
 typedef enum descriptorAttributeOptions
 {
@@ -525,10 +573,6 @@ typedef VkuDescriptorSet_T *VkuDescriptorSet;
 
 VkuDescriptorSet vkuCreateDescriptorSet(VkuDescriptorSetCreateInfo *createInfo);
 void vkuDestroyDescriptorSet(VkuDescriptorSet set);
-
-/**
- * Pipeline
- */
 
 typedef struct VkuVertexAttribute
 {
