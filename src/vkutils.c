@@ -36,6 +36,8 @@
 #include <stdbool.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include "../external/stb/stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../external/stb/stb_image_write.h"
 
 #define CLAMP(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
@@ -3458,6 +3460,175 @@ void vkuDestroyPresenter(VkuPresenter presenter)
     vkuDestroySurface(presenter->surface, presenter->context->instance);
     vkuDestroyWindow(presenter->window);
     free(presenter);
+}
+
+uint8_t *vkuPresenterRetrieveSwapchainImage(VkuPresenter presenter, uint32_t *outWidth, uint32_t *outHeight) {
+    if (presenter->swapchainExtend.width == 0 || presenter->swapchainExtend.height == 0) {
+        EXIT("vkuPresenterRetrieveSwapchainImage: Invalid swapchain extent!\n");
+        return NULL;
+    }
+
+    vkQueueWaitIdle(presenter->context->graphicsQueue);
+
+    VkImage dstImage;
+    VmaAllocation dstAlloc;
+    VmaAllocationInfo allocInfo;
+
+    VkImageCreateInfo imageInfo = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_B8G8R8A8_SRGB,
+        .extent = {presenter->swapchainExtend.width, presenter->swapchainExtend.height, 1},
+        .mipLevels = 1, .arrayLayers = 1, .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_LINEAR,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+    };
+
+    VmaAllocationCreateInfo allocCreateInfo = {
+        .usage = VMA_MEMORY_USAGE_AUTO,
+        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+    };
+
+    if (vmaCreateImage(presenter->context->memoryManager->allocator, &imageInfo, &allocCreateInfo, &dstImage, &dstAlloc, &allocInfo) != VK_SUCCESS) {
+        EXIT("Failed to create destination image\n");
+        return NULL;
+    }
+
+    VkCommandBuffer cmdBuffer;
+    VkCommandBufferAllocateInfo cmdAllocInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandPool = presenter->context->graphicsCmdPool,
+        .commandBufferCount = 1
+    };
+
+    if (vkAllocateCommandBuffers(presenter->context->device, &cmdAllocInfo, &cmdBuffer) != VK_SUCCESS) {
+        vmaDestroyImage(presenter->context->memoryManager->allocator, dstImage, dstAlloc);
+        EXIT("Failed to allocate command buffer!\n");
+        return NULL;
+    }
+
+    VkCommandBufferBeginInfo beginInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+
+    if (vkBeginCommandBuffer(cmdBuffer, &beginInfo) != VK_SUCCESS) {
+        vkFreeCommandBuffers(presenter->context->device, presenter->context->graphicsCmdPool, 1, &cmdBuffer);
+        vmaDestroyImage(presenter->context->memoryManager->allocator, dstImage, dstAlloc);
+        EXIT("Failed to begin command buffer\n");
+        return NULL;
+    }
+
+    VkImageMemoryBarrier barriers[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            .srcAccessMask = 0, .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .image = presenter->swapchainImages[presenter->activeFrame],
+            .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .srcAccessMask = 0, .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .image = dstImage,
+            .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+        }
+    };
+
+    vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 2, barriers);
+
+    VkImageCopy region = {
+        .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+        .extent = {presenter->swapchainExtend.width, presenter->swapchainExtend.height, 1}
+    };
+
+    vkCmdCopyImage(cmdBuffer, presenter->swapchainImages[presenter->activeFrame], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    VkImageMemoryBarrier presentBarrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT, .dstAccessMask = 0,
+        .image = presenter->swapchainImages[presenter->activeFrame],
+        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+    };
+
+    vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, NULL, 0, NULL, 1, &presentBarrier);
+    vkEndCommandBuffer(cmdBuffer);
+
+    VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &cmdBuffer};
+    if (vkQueueSubmit(presenter->context->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS) {
+        vkFreeCommandBuffers(presenter->context->device, presenter->context->graphicsCmdPool, 1, &cmdBuffer);
+        vmaDestroyImage(presenter->context->memoryManager->allocator, dstImage, dstAlloc);
+        EXIT("Failed to submit command buffer\n");
+        return NULL;
+    }
+
+    vkQueueWaitIdle(presenter->context->graphicsQueue);
+    vkFreeCommandBuffers(presenter->context->device, presenter->context->graphicsCmdPool, 1, &cmdBuffer);
+
+    *outWidth = presenter->swapchainExtend.width;
+    *outHeight = presenter->swapchainExtend.height;
+
+    size_t imageSize = *outWidth * *outHeight * 4;
+    uint8_t *imageData = malloc(imageSize);
+    if (!imageData) {
+        vmaDestroyImage(presenter->context->memoryManager->allocator, dstImage, dstAlloc);
+        EXIT("Failed to allocate image data\n");
+        return NULL;
+    }
+
+    VkImageSubresource subresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .arrayLayer = 0};
+    VkSubresourceLayout layout;
+    vkGetImageSubresourceLayout(presenter->context->device, dstImage, &subresource, &layout);
+
+    uint8_t *src = allocInfo.pMappedData;
+    for (uint32_t y = 0; y < *outHeight; ++y)
+        memcpy(imageData + y * *outWidth * 4, src + y * layout.rowPitch, *outWidth * 4);
+
+    vmaDestroyImage(presenter->context->memoryManager->allocator, dstImage, dstAlloc);
+    return imageData;
+}
+
+bool vkuWriteImage(const uint8_t *pixelData, uint32_t width, uint32_t height, uint32_t channels, const char *filename, bool forceOpaque) {
+    if (!pixelData || width == 0 || height == 0 || channels != 4 || !filename) {
+        fprintf(stderr, "vkuWriteImage: Invalid parameters (requires 4 channels)\n");
+        return false;
+    }
+
+    size_t imageSize = width * height * 4;
+    uint8_t *convertedData = (uint8_t *)malloc(imageSize);
+    if (!convertedData) {
+        fprintf(stderr, "vkuWriteImage: Failed to allocate memory\n");
+        return false;
+    }
+
+    for (size_t i = 0; i < width * height; ++i) {
+        size_t idx = i * 4;
+        convertedData[idx + 0] = pixelData[idx + 2]; // R
+        convertedData[idx + 1] = pixelData[idx + 1]; // G
+        convertedData[idx + 2] = pixelData[idx + 0]; // B
+        convertedData[idx + 3] = forceOpaque ? 255 : pixelData[idx + 3]; // A
+    }
+
+    int stride = width * 4;
+    int success = stbi_write_png(filename, width, height, 4, convertedData, stride);
+
+    free(convertedData);
+
+    if (!success) {
+        EXIT("vkuWriteImage: Failed to write image.\n");
+        return false;
+    }
+
+    return true;
 }
 
 // VkuRenderStage

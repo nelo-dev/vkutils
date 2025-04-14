@@ -156,9 +156,9 @@ typedef VkuThreadSafeQueue_T * VkuThreadSafeQueue;
 
 /**
  * @brief A thread-safe FifoQueue
- * Originally an internal data struct for enqueueing buffers for destruction. May be useful.ABC
+ * Originally an internal data struct for enqueueing buffers for destruction. May be useful.
  * 
- * @param initial_capacity The initial queue capacity. To increase performance (avoid realloc) set this value to proper value.ABC
+ * @param initial_capacity The initial queue capacity. To increase performance (avoid realloc) set this value to proper value.
  * @return A VkuThreadSafeQueue handle.
  */
 
@@ -173,7 +173,7 @@ VkuThreadSafeQueue vkuQueueCreate(size_t initial_capacity);
 void vkuQueueDestroy(VkuThreadSafeQueue queue);
 
 /**
- * @brief Function to enqueue a PTR to an item to the queue.ABC
+ * @brief Function to enqueue a PTR to an item to the queue.
  * 
  * WARNING: This function only enqueues an 8byte PTR value!
  * @param queue VkuThreadSafeQueue. 
@@ -372,6 +372,8 @@ uint32_t vkuPresenterGetFramesInFlight(VkuPresenter presenter);
 void vkuPresenterSetPresentMode(VkuPresenter presenter, VkPresentModeKHR presentMode);
 VkuWindow vkuPresenterGetWindow(VkuPresenter presenter);
 void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter syncPresenter);
+uint8_t * vkuPresenterRetrieveSwapchainImage(VkuPresenter presenter, uint32_t * outWidth, uint32_t * outHeight);
+bool vkuWriteImage(const uint8_t *pixelData, uint32_t width, uint32_t height, uint32_t channels, const char *filename, bool forceOpaque);
 
 typedef enum VkuRenderOptions
 {
