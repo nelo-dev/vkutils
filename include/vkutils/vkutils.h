@@ -509,6 +509,9 @@ typedef struct VkuTextureSamplerCreateInfo
     VkFilter magFilter;
     VkSamplerAddressMode repeatMode;
     uint32_t mipmapLevels;
+    VkBool32 enableCompare;
+    VkCompareOp compareOp;
+    VkBorderColor borderColor;
 } VkuTextureSamplerCreateInfo;
 
 typedef struct VkuTextureSampler_T
@@ -603,6 +606,10 @@ typedef struct VkuPipelineCreateInfo
     VkCompareOp depthCompareMode;
     VkCullModeFlags cullMode;
     VkuRenderStage renderStage;
+    VkBool32 enableDepthBias;
+    float depthBiasConstantFactor;
+    float depthBiasSlopeFactor;
+    VkPrimitiveTopology topology;
 } VkuPipelineCreateInfo;
 
 typedef struct VkuPipeline_T

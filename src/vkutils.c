@@ -362,6 +362,10 @@ typedef struct VkuGraphicsPipelineCreateInfo
     VkBool32 depth_test_enable;
     VkCompareOp depth_compare_mode;
     VkCullModeFlags cullMode;
+    VkBool32 enableDepthBias;
+    float depthBiasConstantFactor;
+    float depthBiasSlopeFactor;
+    VkPrimitiveTopology topology;
 } VkuGraphicsPipelineCreateInfo;
 
 VkPipelineLayout vkuCreatePipelineLayout(VkDevice device, VkDescriptorSetLayout *setLayouts, uint32_t setLayoutCount);
@@ -1739,10 +1743,12 @@ VkRenderPass vkuCreateVkRenderPass(VkuVkRenderPassCreateInfo *createInfo)
     subpass.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-    if (createInfo->enableTargetColorImage)
-    {
+    if (createInfo->enableTargetColorImage) {
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &colorAttachmentRef;
+    } else {
+        subpass.colorAttachmentCount = 0;
+        subpass.pColorAttachments = NULL; // Explicitly no color attachments
     }
 
     if (createInfo->enableDepthTest)
@@ -1774,10 +1780,17 @@ VkRenderPass vkuCreateVkRenderPass(VkuVkRenderPassCreateInfo *createInfo)
     dependency.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2;
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    dependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+    if (createInfo->enableTargetColorImage)
+    {
+        dependency.srcStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstStageMask |= VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask |= VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    }
 
     // Render pass info
     VkRenderPassCreateInfo2 renderPassInfo = {};
@@ -1828,7 +1841,7 @@ VkFramebuffer *vkuCreateVkFramebuffer(VkuVkFramebufferCreateInfo *createInfo)
             {
                 attachments[attachmentCount++] = createInfo->renderTargetDepthImageViews[0];
             }
-            else
+            else if (createInfo->renderStageDepthImageView != VK_NULL_HANDLE)
             {
                 attachments[attachmentCount++] = createInfo->renderStageDepthImageView;
             }
@@ -2221,6 +2234,9 @@ typedef struct VkuSamplerCreateInfo
     VkPhysicalDevice physicalDevice;
     VkDevice device;
     float maxAnisotropy;
+    VkBool32 enableCompare;
+    VkCompareOp compareOp;
+    VkBorderColor borderColor;
 } VkuSamplerCreateInfo;
 
 VkSampler vkuCreateSampler(VkuSamplerCreateInfo *create_info)
@@ -2236,6 +2252,7 @@ VkSampler vkuCreateSampler(VkuSamplerCreateInfo *create_info)
     samplerInfo.addressModeW = create_info->repeatMode;
     samplerInfo.anisotropyEnable = VK_TRUE;
     samplerInfo.maxAnisotropy = create_info->maxAnisotropy;
+    samplerInfo.borderColor = create_info->borderColor;
 
     VkPhysicalDeviceProperties properties = {};
     vkGetPhysicalDeviceProperties(create_info->physicalDevice, &properties);
@@ -2243,8 +2260,8 @@ VkSampler vkuCreateSampler(VkuSamplerCreateInfo *create_info)
     samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.compareEnable = create_info->compareOp;
+    samplerInfo.compareOp = create_info->compareOp ? create_info->compareOp : VK_COMPARE_OP_ALWAYS;
 
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     samplerInfo.mipLodBias = 0.0f;
@@ -2525,7 +2542,11 @@ VkVertexInputAttributeDescription *vkuGetVertexAttributeDescriptions(VkuVertexLa
 VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
 {
     VkShaderModule vertexShaderModule = vkuCreateShaderModule(createInfo->vertexShaderSpirv, createInfo->vertexShaderLength, createInfo->device);
-    VkShaderModule fragmentShaderModule = vkuCreateShaderModule(createInfo->fragmentShaderSpirv, createInfo->fragmentShaderLength, createInfo->device);
+    
+    VkShaderModule fragmentShaderModule = NULL;
+    if (createInfo->fragmentShaderSpirv != NULL && createInfo->fragmentShaderLength > 0) {
+        fragmentShaderModule = vkuCreateShaderModule(createInfo->fragmentShaderSpirv, createInfo->fragmentShaderLength, createInfo->device);
+    }
 
     VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
     vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -2534,17 +2555,21 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
     vertShaderStageInfo.pName = "main";
 
     VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
-    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragmentShaderModule;
-    fragShaderStageInfo.pName = "main";
-
-    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+    uint32_t stageCount = 1;
+    VkPipelineShaderStageCreateInfo shaderStages[2] = {vertShaderStageInfo};
+    if (fragmentShaderModule != NULL) {
+        fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragShaderStageInfo.module = fragmentShaderModule;
+        fragShaderStageInfo.pName = "main";
+        shaderStages[1] = fragShaderStageInfo;
+        stageCount = 2;
+    }
 
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR};
-
+        VK_DYNAMIC_STATE_SCISSOR
+    };
     uint32_t dynamicStatesCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
 
     VkPipelineDynamicStateCreateInfo dynamicState = {};
@@ -2555,17 +2580,17 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
-    VkVertexInputBindingDescription bindingDiscription = vkuGetVertexInputBindingDescription(&createInfo->vertexInputLayout);
+    VkVertexInputBindingDescription bindingDescription = vkuGetVertexInputBindingDescription(&createInfo->vertexInputLayout);
     VkVertexInputAttributeDescription *AttributeDescriptions = vkuGetVertexAttributeDescriptions(&createInfo->vertexInputLayout);
 
     vertexInputInfo.vertexBindingDescriptionCount = (createInfo->vertexInputLayout.attributeCount == 0) ? 0 : 1;
-    vertexInputInfo.pVertexBindingDescriptions = (createInfo->vertexInputLayout.attributeCount == 0) ? NULL : &bindingDiscription;
+    vertexInputInfo.pVertexBindingDescriptions = (createInfo->vertexInputLayout.attributeCount == 0) ? NULL : &bindingDescription;
     vertexInputInfo.vertexAttributeDescriptionCount = createInfo->vertexInputLayout.attributeCount;
     vertexInputInfo.pVertexAttributeDescriptions = (createInfo->vertexInputLayout.attributeCount == 0) ? NULL : AttributeDescriptions;
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssembly.topology = createInfo->topology;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkViewport viewport = {};
@@ -2596,19 +2621,15 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = createInfo->cullMode;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = VK_FALSE;
-    rasterizer.depthBiasConstantFactor = 0.0f;
-    rasterizer.depthBiasClamp = 0.0f;
-    rasterizer.depthBiasSlopeFactor = 0.0f;
+    rasterizer.depthBiasEnable = createInfo->enableDepthBias;
+    rasterizer.depthBiasConstantFactor = createInfo->depthBiasConstantFactor;
+    rasterizer.depthBiasSlopeFactor = createInfo->depthBiasSlopeFactor;
 
     VkPipelineMultisampleStateCreateInfo multisampling = {};
     multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisampling.sampleShadingEnable = VK_TRUE;
     multisampling.rasterizationSamples = createInfo->msaaSamples;
     multisampling.minSampleShading = 0.2f;
-    multisampling.pSampleMask = NULL;
-    multisampling.alphaToCoverageEnable = VK_FALSE;
-    multisampling.alphaToOneEnable = VK_FALSE;
 
     VkPipelineDepthStencilStateCreateInfo depthStencil = {};
     depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -2623,28 +2644,23 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
     VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
     colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     colorBlendAttachment.blendEnable = VK_FALSE;
-    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+    if (fragmentShaderModule == NULL) colorBlendAttachment.colorWriteMask = 0;
 
     VkPipelineColorBlendStateCreateInfo colorBlending = {};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &colorBlendAttachment;
-    colorBlending.blendConstants[0] = 0.0f;
-    colorBlending.blendConstants[1] = 0.0f;
-    colorBlending.blendConstants[2] = 0.0f;
-    colorBlending.blendConstants[3] = 0.0f;
+
+    if (fragmentShaderModule != NULL) {
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &colorBlendAttachment;
+    }
 
     VkGraphicsPipelineCreateInfo pipelineCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-        .stageCount = 2,
-        .pStages = shaderStages,
+        .stageCount = stageCount, // Updated dynamically
+        .pStages = shaderStages, // Updated dynamically
         .pVertexInputState = &vertexInputInfo,
         .pInputAssemblyState = &inputAssembly,
         .pViewportState = &viewportState,
@@ -2657,13 +2673,17 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
         .renderPass = createInfo->renderPass,
         .subpass = 0,
         .basePipelineHandle = VK_NULL_HANDLE,
-        .basePipelineIndex = -1};
+        .basePipelineIndex = -1
+    };
 
     VkPipeline graphicsPipeline = VK_NULL_HANDLE;
     VK_CHECK(vkCreateGraphicsPipelines(createInfo->device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, &graphicsPipeline));
 
+    // Clean up shader modules
     vkDestroyShaderModule(createInfo->device, vertexShaderModule, NULL);
-    vkDestroyShaderModule(createInfo->device, fragmentShaderModule, NULL);
+    if (fragmentShaderModule != NULL) {
+        vkDestroyShaderModule(createInfo->device, fragmentShaderModule, NULL);
+    }
     free(AttributeDescriptions);
 
     return graphicsPipeline;
@@ -4279,8 +4299,11 @@ void vkuFrameBeginRenderStage(VkuFrame frame, VkuRenderStage renderStage)
     vkCmdSetScissor(frame->presenter->cmdBuffer[frame->presenter->currentFrame], 0, 1, &scissor); 
 
     VkClearValue clearValues[2] = {{}, {}};
-    clearValues[0].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
-    clearValues[1].depthStencil = (VkClearDepthStencilValue){1.0f, 0};
+    int clearValueCnt = 0;
+    if ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE))
+        clearValues[clearValueCnt++].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
+    if ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE))
+        clearValues[clearValueCnt++].depthStencil = (VkClearDepthStencilValue){1.0f, 0};
 
     VkRenderPassBeginInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -4433,7 +4456,10 @@ VkuTextureSampler vkuCreateTextureSampler(VkuContext context, VkuTextureSamplerC
         .mipmapLevels = createInfo->mipmapLevels,
         .physicalDevice = context->physicalDevice,
         .device = context->device,
-        .maxAnisotropy = 16.0f};
+        .maxAnisotropy = 16.0f,
+        .enableCompare = createInfo->enableCompare,
+        .compareOp = createInfo->compareOp,
+        .borderColor = createInfo->borderColor};
 
     sampler->sampler = vkuCreateSampler(&samplerInfo);
 
@@ -4569,10 +4595,14 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
     size_t fragmentShaderLength = createInfo->fragmentShaderLength;
 
     pipeline->internalVertexSpirv = (char *)malloc((vertexShaderLength) * sizeof(char));
-    pipeline->internalFragmentSpirv = (char *)malloc((fragmentShaderLength) * sizeof(char));
-
     memcpy(pipeline->internalVertexSpirv, createInfo->vertexShaderSpirV, vertexShaderLength);
-    memcpy(pipeline->internalFragmentSpirv, createInfo->fragmentShaderSpirV, fragmentShaderLength);
+
+    if (createInfo->fragmentShaderSpirV != NULL && createInfo->fragmentShaderLength > 0) {
+        pipeline->internalFragmentSpirv = (char *)malloc((fragmentShaderLength) * sizeof(char));
+        memcpy(pipeline->internalFragmentSpirv, createInfo->fragmentShaderSpirV, fragmentShaderLength);
+    } else {
+        pipeline->internalFragmentSpirv = NULL;
+    }
 
     pipeline->vertexAttributes = (VkuVertexAttribute *)malloc(sizeof(VkuVertexAttribute) * createInfo->vertexLayout.attributeCount);
     for (uint32_t i = 0; i < createInfo->vertexLayout.attributeCount; i++)
@@ -4598,7 +4628,12 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
         .depth_test_write = createInfo->depthTestWrite,
         .depth_test_enable = createInfo->depthTestEnable,
         .depth_compare_mode = createInfo->depthCompareMode,
-        .cullMode = createInfo->cullMode};
+        .cullMode = createInfo->cullMode,
+        .enableDepthBias = createInfo->enableDepthBias,
+        .depthBiasConstantFactor = createInfo->depthBiasConstantFactor,
+        .depthBiasSlopeFactor = createInfo->depthBiasSlopeFactor,
+        .topology = createInfo->topology
+    };
 
     pipeline->graphicsPipeline = vkuCreateGraphicsPipeline(&pipelineCreateInfo);
 
@@ -4628,7 +4663,11 @@ void vkuPipelineUpdate(VkuPipeline pipeline)
         .depth_test_write = pipeline->recreateInfo.depthTestWrite,
         .depth_test_enable = pipeline->recreateInfo.depthTestEnable,
         .depth_compare_mode = pipeline->recreateInfo.depthCompareMode,
-        .cullMode = pipeline->recreateInfo.cullMode};
+        .cullMode = pipeline->recreateInfo.cullMode,
+        .enableDepthBias = pipeline->recreateInfo.enableDepthBias,
+        .depthBiasConstantFactor = pipeline->recreateInfo.depthBiasConstantFactor,
+        .depthBiasSlopeFactor = pipeline->recreateInfo.depthBiasSlopeFactor,
+        .topology = pipeline->recreateInfo.topology};
 
     pipeline->graphicsPipeline = vkuCreateGraphicsPipeline(&pipelineCreateInfo);
 }
@@ -4638,8 +4677,11 @@ void vkuDestroyPipeline(VkuContext context, VkuPipeline pipeline)
     vkDeviceWaitIdle(context->device);
 
     vkuObjectManagerRemove(pipeline->renderStage->pipelineManager, (void *)pipeline);
-    free(pipeline->internalFragmentSpirv);
+
     free(pipeline->internalVertexSpirv);
+    if (pipeline->internalFragmentSpirv != NULL)
+        free(pipeline->internalFragmentSpirv);
+
     free(pipeline->vertexAttributes);
     vkuDestroyGraphicsPipeline(context->device, pipeline->graphicsPipeline);
     vkuDestroyPipelineLayout(context->device, pipeline->pipelineLayout);
