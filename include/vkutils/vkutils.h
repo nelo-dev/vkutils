@@ -396,6 +396,7 @@ typedef struct VkuRenderStage_T
     VkuContext context;
     VkSampleCountFlagBits sampleCount;
     int options;
+    int staticDepthArrayCount;
     VkBool32 enableDepthTesting;
     VkBool32 outputCount;
 
@@ -430,6 +431,7 @@ typedef struct VkuStaticRenderStageCreateInfo {
     int options;
     VkBool32 enableDepthTesting;
     VkSampleCountFlagBits msaaSamples;
+    int depthLayers;
 } VkuStaticRenderStageCreateInfo;
 
 VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * createInfo);
@@ -552,6 +554,7 @@ typedef struct VkuDescriptorSetAttribute
     VkuTexture2D tex2D;
     VkuTexture2DArray tex2DArray;
     VkuUniformBuffer uniformBuffer;
+    VkShaderStageFlagBits shaderStage;
 } VkuDescriptorSetAttribute;
 
 typedef struct VkuDescriptorSetCreateInfo

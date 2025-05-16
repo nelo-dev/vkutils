@@ -141,6 +141,7 @@ typedef struct VkuVkImageCreateInfo
     VmaAllocator allocator;
     uint32_t width, height;
     uint32_t mipLevels;
+    uint32_t arrayLayers;
     VkFormat format;
     VkImageTiling tiling;
     VkImageUsageFlags usageFlags;
@@ -153,7 +154,7 @@ typedef struct VkuVkImageCreateInfo
 void vkuCreateImage(VkuVkImageCreateInfo *createInfo);
 void vkuDestroyImage(VkImage image, VmaAllocation imageAlloc, VmaAllocator allocator);
 
-VkImageView vkuCreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipmap_levels, VkDevice device);
+VkImageView vkuCreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipmap_levels, uint32_t layerCount, VkDevice device);
 void vkuDestroyImageView(VkImageView imageView, VkDevice device);
 
 typedef struct VkuColorResourcesCreateInfo
@@ -185,6 +186,7 @@ typedef struct VkuDepthResourcesCreateInfo
     VmaAllocator allocator;
     VkExtent2D extend;
     VkSampleCountFlagBits msaa_samples;
+    uint32_t layerCount;
 } VkuDepthResourcesCreateInfo;
 
 typedef struct VkuDepthResource_T
@@ -201,7 +203,7 @@ VkFormat vkuFindSupportedFormat(VkFormat candidates[], uint32_t numCandidates, V
 VkFormat vkuFindDepthFormat(VkPhysicalDevice physicalDevice);
 VkuDepthResource vkuCreateDepthResources(VkuDepthResourcesCreateInfo *createInfo);
 void vkuDestroyDepthResources(VmaAllocator allocator, VkDevice device, VkuDepthResource depthResource);
-void vkuTransitionDepthImageLayout(VkDevice device, VkCommandBuffer commandBuffer, VkImage depthImage);
+void vkuTransitionDepthImageLayout(VkDevice device, VkCommandBuffer commandBuffer, VkImage depthImage, uint32_t layerCount);
 
 typedef struct VkuVkSwapchainKHRCreateInfo
 {
@@ -256,6 +258,7 @@ void vkuDestroyVkRenderPass(VkDevice device, VkRenderPass renderPass);
 typedef struct VkuVkFramebufferCreateInfo
 {
     uint32_t imageCount;
+    uint32_t layerCount;
     VkSampleCountFlagBits msaaSamples;
     VkImageView renderStageColorImageView;
     VkImageView renderStageDepthImageView;
@@ -766,6 +769,7 @@ char **vkuGetDeviceExtensions(uint32_t *pDeviceExtensionCount)
     vkuAddStringToArray(&extensions, pDeviceExtensionCount, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
     vkuAddStringToArray(&extensions, pDeviceExtensionCount, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     vkuAddStringToArray(&extensions, pDeviceExtensionCount, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+    vkuAddStringToArray(&extensions, pDeviceExtensionCount, VK_EXT_SHADER_VIEWPORT_INDEX_LAYER_EXTENSION_NAME);
 
     return extensions;
 }
@@ -1290,7 +1294,7 @@ void vkuCreateImage(VkuVkImageCreateInfo *createInfo)
         .format = createInfo->format,
         .extent = {createInfo->width, createInfo->height, 1},
         .mipLevels = createInfo->mipLevels,
-        .arrayLayers = 1,
+        .arrayLayers = createInfo->arrayLayers,
         .samples = createInfo->numSamples,
         .tiling = createInfo->tiling,
         .usage = createInfo->usageFlags,
@@ -1311,18 +1315,18 @@ void vkuDestroyImage(VkImage image, VmaAllocation imageAlloc, VmaAllocator alloc
 
 // VkImageView
 
-VkImageView vkuCreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipmap_levels, VkDevice device)
+VkImageView vkuCreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipmap_levels, uint32_t layerCount, VkDevice device)
 {
     VkImageViewCreateInfo viewInfo = {};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = (layerCount > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = format;
     viewInfo.subresourceRange.aspectMask = aspectFlags;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = mipmap_levels;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = layerCount;
 
     VkImageView image_view = VK_NULL_HANDLE;
     VK_CHECK(vkCreateImageView(device, &viewInfo, NULL, &image_view));
@@ -1354,10 +1358,11 @@ VkuColorResource vkuCreateColorResources(VkuColorResourcesCreateInfo *createInfo
         .pImage = &colorResource->image,
         .pImageAlloc = &colorResource->imageAlloc,
         .pImageAllocInfo = NULL,
+        .arrayLayers = 1,
     };
 
     vkuCreateImage(&img_info);
-    colorResource->imageView = vkuCreateImageView(colorResource->image, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, createInfo->device);
+    colorResource->imageView = vkuCreateImageView(colorResource->image, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, createInfo->device);
     return colorResource;
 }
 
@@ -1410,10 +1415,11 @@ VkuDepthResource vkuCreateDepthResources(VkuDepthResourcesCreateInfo *createInfo
         .pImage = &depthResource->image,
         .pImageAlloc = &depthResource->imageAlloc,
         .pImageAllocInfo = NULL,
+        .arrayLayers = createInfo->layerCount
     };
 
     vkuCreateImage(&image_info);
-    depthResource->imageView = vkuCreateImageView(depthResource->image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, createInfo->device);
+    depthResource->imageView = vkuCreateImageView(depthResource->image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1, createInfo->layerCount, createInfo->device);
     return depthResource;
 }
 
@@ -1424,7 +1430,7 @@ void vkuDestroyDepthResources(VmaAllocator allocator, VkDevice device, VkuDepthR
     free(depthResource);
 }
 
-void vkuTransitionDepthImageLayout(VkDevice device, VkCommandBuffer commandBuffer, VkImage depthImage)
+void vkuTransitionDepthImageLayout(VkDevice device, VkCommandBuffer commandBuffer, VkImage depthImage, uint32_t layerCount)
 {
     VkImageMemoryBarrier barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1438,7 +1444,7 @@ void vkuTransitionDepthImageLayout(VkDevice device, VkCommandBuffer commandBuffe
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.layerCount = layerCount;
 
     VkFormat depthImageFormat = VK_FORMAT_D32_SFLOAT;
     if (depthImageFormat == VK_FORMAT_D32_SFLOAT_S8_UINT || depthImageFormat == VK_FORMAT_D24_UNORM_S8_UINT)
@@ -1588,7 +1594,7 @@ VkImageView *vkuCreateSwapchainImageViews(uint32_t swapchain_img_count, VkImage 
     VkImageView *image_views = (VkImageView *)malloc(sizeof(VkImageView) * swapchain_img_count);
 
     for (uint32_t i = 0; i < swapchain_img_count; i++)
-        image_views[i] = vkuCreateImageView(swapchain_images[i], swapchain_image_format, VK_IMAGE_ASPECT_COLOR_BIT, 1, device);
+        image_views[i] = vkuCreateImageView(swapchain_images[i], swapchain_image_format, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, device);
 
     return image_views;
 }
@@ -1873,7 +1879,7 @@ VkFramebuffer *vkuCreateVkFramebuffer(VkuVkFramebufferCreateInfo *createInfo)
         framebufferInfo.pAttachments = attachments;
         framebufferInfo.width = createInfo->extend.width;
         framebufferInfo.height = createInfo->extend.height;
-        framebufferInfo.layers = 1;
+        framebufferInfo.layers = createInfo->layerCount;
 
         // Create the framebuffer
         VkResult result = vkCreateFramebuffer(createInfo->device, &framebufferInfo, NULL, &framebuffers[i]);
@@ -2142,7 +2148,7 @@ void vkuDestroyTextureImage(VmaAllocator allocator, VkImage texImg, VmaAllocatio
 
 VkImageView vkuCreateTextureImageView(VkDevice device, VkImage image, uint32_t mipLevels)
 {
-    return vkuCreateImageView(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, device);
+    return vkuCreateImageView(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels, 1, device);
 }
 
 void vkuDestroyTextureImageView(VkDevice device, VkImageView image_view)
@@ -2329,17 +2335,16 @@ VkDescriptorSetLayout vkuCreateDescriptorSetLayout(VkDevice device, VkuDescripto
         bindings[i].binding = i;
         bindings[i].descriptorCount = 1;
         bindings[i].pImmutableSamplers = NULL;
+        bindings[i].stageFlags = attribs[i].shaderStage;
 
         if (attribs[i].type == VKU_DESCRIPTOR_SET_ATTRIB_SAMPLER)
         {
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         }
 
         if (attribs[i].type == VKU_DESCRIPTOR_SET_ATTRIB_UNIFORM_BUFFER)
         {
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            bindings[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         }
     }
 
@@ -3255,6 +3260,7 @@ VkuDepthResource vkuRenderResourceManagerGetDepthResource(VkuRenderResourceManag
             .allocator = resourceManager->presenter->context->memoryManager->allocator,
             .extend = resourceManager->presenter->swapchainExtend,
             .msaa_samples = sampleCount,
+            .layerCount = 1
         };
 
         resourceManager->depthResources[index] = vkuCreateDepthResources(&depthResourcesCreateInfo);
@@ -3293,6 +3299,7 @@ void vkuRenderResourceManagerUpdate(VkuRenderResourceManager resourceManager)
                 .allocator = resourceManager->presenter->context->memoryManager->allocator,
                 .extend = resourceManager->presenter->swapchainExtend,
                 .msaa_samples = resourceManager->sampleFlags[i],
+                .layerCount = 1
             };
 
             resourceManager->depthResources[i] = vkuCreateDepthResources(&depthResourcesCreateInfo);
@@ -3663,6 +3670,7 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo)
     renderStage->enableDepthTesting = createInfo->enableDepthTesting;
     renderStage->outputCount = ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER) ? renderStage->presenter->swapchainImageCount : 1;
     renderStage->staticRenderStage = VK_FALSE;
+    renderStage->staticDepthArrayCount = 1;
 
     if ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER)
     {
@@ -3697,11 +3705,12 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo)
                 .pImage = &(renderStage->pTargetColorImages[0]),
                 .pImageAlloc = &(renderStage->pTargetColorImgAllocs[0]),
                 .pImageAllocInfo = NULL,
+                .arrayLayers = 1
             };
 
             vkuCreateImage(&imageCreateInfo);
 
-            renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, renderStage->presenter->context->device);
+            renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, renderStage->presenter->context->device);
         }
 
         if ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE && renderStage->enableDepthTesting)
@@ -3718,11 +3727,12 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo)
                 .pImage = &(renderStage->pTargetDepthImages[0]),
                 .pImageAlloc = &(renderStage->pTargetDepthImgAllocs[0]),
                 .pImageAllocInfo = NULL,
+                .arrayLayers = 1
             };
 
             vkuCreateImage(&imageCreateInfo);
 
-            renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, renderStage->presenter->context->device);
+            renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, 1, renderStage->presenter->context->device);
         }
     }
 
@@ -3761,7 +3771,8 @@ VkuRenderStage vkuCreateRenderStage(VkuRenderStageCreateInfo *createInfo)
         .device = renderStage->presenter->context->device,
         .enableTargetColorImage = ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER) ? true : ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE) == VKU_RENDER_OPTION_COLOR_IMAGE),
         .enableTargetDepthImage = ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER) ? false : ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE),
-        .enableDepthTest = renderStage->enableDepthTesting};
+        .enableDepthTest = renderStage->enableDepthTesting,
+        .layerCount = 1};
 
     renderStage->framebuffers = vkuCreateVkFramebuffer(&frameBufferCreateInfo);
 
@@ -3869,11 +3880,12 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage)
                 .pImage = &(renderStage->pTargetColorImages[0]),
                 .pImageAlloc = &(renderStage->pTargetColorImgAllocs[0]),
                 .pImageAllocInfo = NULL,
+                .arrayLayers = 1
             };
 
             vkuCreateImage(&imageCreateInfo);
 
-            renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, renderStage->presenter->context->device);
+            renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, renderStage->presenter->context->device);
         }
 
         if ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE && renderStage->enableDepthTesting)
@@ -3890,11 +3902,12 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage)
                 .pImage = &(renderStage->pTargetDepthImages[0]),
                 .pImageAlloc = &(renderStage->pTargetDepthImgAllocs[0]),
                 .pImageAllocInfo = NULL,
+                .arrayLayers = 1,
             };
 
             vkuCreateImage(&imageCreateInfo);
 
-            renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, renderStage->presenter->context->device);
+            renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, 1, renderStage->presenter->context->device);
         }
     }
 
@@ -3933,7 +3946,8 @@ void vkuRenderStageUpdate(VkuRenderStage renderStage)
         .device = renderStage->presenter->context->device,
         .enableTargetColorImage = ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER) ? true : ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE) == VKU_RENDER_OPTION_COLOR_IMAGE),
         .enableTargetDepthImage = ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER) ? false : ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE),
-        .enableDepthTest = renderStage->enableDepthTesting};
+        .enableDepthTest = renderStage->enableDepthTesting,
+        .layerCount = 1};
 
     renderStage->framebuffers = vkuCreateVkFramebuffer(&frameBufferCreateInfo);
 
@@ -4010,6 +4024,7 @@ VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * creat
     renderStage->sampleCount = createInfo->msaaSamples;
     renderStage->options = createInfo->options;
     renderStage->staticRenderStage = VK_TRUE;
+    renderStage->staticDepthArrayCount = createInfo->depthLayers;
     
     if ((renderStage->options & VKU_RENDER_OPTION_PRESENTER) == VKU_RENDER_OPTION_PRESENTER)
         EXIT("VkuError: A VkuStaticRenderStage cant be created with VKU_RENDER_OPTION_PRESENTER option enabled!");
@@ -4038,10 +4053,11 @@ VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * creat
             .pImage = &(renderStage->pTargetColorImages[0]),
             .pImageAlloc = &(renderStage->pTargetColorImgAllocs[0]),
             .pImageAllocInfo = NULL,
+            .arrayLayers = 1
         };
 
         vkuCreateImage(&imageCreateInfo);
-        renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, renderStage->context->device);
+        renderStage->pTargetColorImgViews[0] = vkuCreateImageView(renderStage->pTargetColorImages[0], VK_FORMAT_B8G8R8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, 1, renderStage->context->device);
     }
 
     if ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE && renderStage->enableDepthTesting)
@@ -4058,10 +4074,11 @@ VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * creat
             .pImage = &(renderStage->pTargetDepthImages[0]),
             .pImageAlloc = &(renderStage->pTargetDepthImgAllocs[0]),
             .pImageAllocInfo = NULL,
+            .arrayLayers = createInfo->depthLayers
         };
 
         vkuCreateImage(&imageCreateInfo);
-        renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, renderStage->context->device);
+        renderStage->pTargetDepthImgViews[0] = vkuCreateImageView(renderStage->pTargetDepthImages[0], VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT, 1, createInfo->depthLayers, renderStage->context->device);
     }
 
     if (renderStage->sampleCount != VK_SAMPLE_COUNT_1_BIT && ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE) == VKU_RENDER_OPTION_COLOR_IMAGE))
@@ -4085,6 +4102,7 @@ VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * creat
             .allocator = renderStage->context->memoryManager->allocator,
             .extend = renderStage->extend,
             .msaa_samples = renderStage->sampleCount,
+            .layerCount = 1
         };
 
         renderStage->depthResource = vkuCreateDepthResources(&depthInfo);
@@ -4115,7 +4133,8 @@ VkuRenderStage vkuCreateStaticRenderStage(VkuStaticRenderStageCreateInfo * creat
         .device = renderStage->context->device,
         .enableTargetColorImage = ((renderStage->options & VKU_RENDER_OPTION_COLOR_IMAGE) == VKU_RENDER_OPTION_COLOR_IMAGE),
         .enableTargetDepthImage = ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE),
-        .enableDepthTest = renderStage->enableDepthTesting};
+        .enableDepthTest = renderStage->enableDepthTesting,
+        .layerCount = createInfo->depthLayers};
 
     renderStage->framebuffers = vkuCreateVkFramebuffer(&frameBufferCreateInfo);
 
@@ -4329,7 +4348,7 @@ void vkuFrameFinishRenderStage(VkuFrame frame, VkuRenderStage renderStage)
 
     if (renderStage->sampleCount == VK_SAMPLE_COUNT_1_BIT && ((renderStage->options & VKU_RENDER_OPTION_DEPTH_IMAGE) == VKU_RENDER_OPTION_DEPTH_IMAGE))
     {
-        vkuTransitionDepthImageLayout(frame->presenter->context->device, frame->presenter->cmdBuffer[frame->presenter->currentFrame], renderStage->pTargetDepthImages[0]);
+        vkuTransitionDepthImageLayout(frame->presenter->context->device, frame->presenter->cmdBuffer[frame->presenter->currentFrame], renderStage->pTargetDepthImages[0], renderStage->staticDepthArrayCount);
     }
 }
 
@@ -4534,6 +4553,7 @@ VkuDescriptorSet vkuCreateDescriptorSet(VkuDescriptorSetCreateInfo *createInfo)
         set->attributes[i].tex2D = createInfo->attributes[i].tex2D;
         set->attributes[i].tex2DArray = createInfo->attributes[i].tex2DArray;
         set->attributes[i].uniformBuffer = createInfo->attributes[i].uniformBuffer;
+        set->attributes[i].shaderStage = createInfo->attributes[i].shaderStage;
     }
 
     if (set->renderStage->staticRenderStage == VK_FALSE)
