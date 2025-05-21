@@ -4368,11 +4368,11 @@ void vkuFramePipelinePushConstant(VkuFrame frame, VkuPipeline pipeline, void *da
     vkCmdPushConstants(frame->cmdBuffer, pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, size, data);
 }
 
-void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount)
+void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount)
 {
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(frame->cmdBuffer, 0, 1, &buffer->buffer, offsets);
-    vkCmdDraw(frame->cmdBuffer, vertexCount, 1, 0, 0);
+    vkCmdDraw(frame->cmdBuffer, vertexCount, instanceCount, 0, 0);
 }
 
 void vkuFrameUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data)

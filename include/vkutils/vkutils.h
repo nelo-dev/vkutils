@@ -452,7 +452,7 @@ VkuFrame vkuPresenterBeginFrame(VkuPresenter presenter);
 void vkuPresenterSubmitFrame(VkuFrame frame);
 void vkuFrameBeginRenderStage(VkuFrame frame, VkuRenderStage renderStage);
 void vkuFrameFinishRenderStage(VkuFrame frame, VkuRenderStage renderStage);
-void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount);
+void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount);
 void vkuFrameDrawVoid(VkuFrame frame, uint64_t vertexCount);
 
 typedef struct VkuTexture2DCreateInfo
