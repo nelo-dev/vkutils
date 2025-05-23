@@ -248,8 +248,9 @@ VkDeviceSize vkuMemoryMamgerGetAllocatedMemorySize(VkuMemoryManager manager);
 
 typedef enum VkuBufferUsage
 {
-    VKU_BUFFER_USAGE_CPU_TO_GPU,
-    VKU_BUFFER_USAGE_GPU_ONLY
+    VKU_BUFFER_USAGE_CPU_TO_GPU = (1 << 0),
+    VKU_BUFFER_USAGE_GPU_ONLY = (1 << 1),
+    VKU_BUFFER_USAGE_COMPUTE = (1 << 2)
 } VkuBufferUsage;
 
 typedef struct VkuBuffer_T
@@ -263,19 +264,18 @@ typedef struct VkuBuffer_T
 
 typedef VkuBuffer_T *VkuBuffer;
 
-VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage);
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize); // Use vkuEnqueueBufferDestruction() for async buffer destruction.
-void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
+VkuBuffer vkuCreateBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage);
+void vkuDestroyBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize);
+void vkuSetBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size);
 void vkuCopyBuffer(VkuMemoryManager manager, VkuBuffer *srcBuffer, VkuBuffer *dstBuffer, VkDeviceSize *size, uint32_t count);
-void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
-void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer);
+void * vkuMapBuffer(VkuMemoryManager manager, VkuBuffer buffer);
+void vkuUnmapBuffer(VkuMemoryManager manager, VkuBuffer buffer);
 void vkuEnqueueBufferDestruction(VkuMemoryManager manager, VkuBuffer buffer);
 
 typedef enum vkuContextUsageFlags
 {
-    VKU_CONTEXT_USAGE_BASIC = (1 << 0),
-    VKU_CONTEXT_USAGE_PRESENTATION = (1 << 1),
-    VKU_CONTEXT_USAGE_COMPUTE = (1 << 2)
+    VKU_CONTEXT_USAGE_OFFSCREEN = (1 << 0),
+    VKU_CONTEXT_USAGE_PRESENTATION = (1 << 1)
 } vkuContextUsageFlags;
 
 typedef struct VkuContextCreateInfo
@@ -302,6 +302,8 @@ typedef struct VkuContext_T
     VkQueue computeQueue;
 
     VkCommandPool graphicsCmdPool;
+    VkCommandPool computeCmdPool;
+
     VkuMemoryManager memoryManager;
 } VkuContext_T;
 
@@ -539,12 +541,14 @@ typedef VkuUniformBuffer_T *VkuUniformBuffer;
 
 VkuUniformBuffer vkuCreateUniformBuffer(VkuContext context, VkDeviceSize bufferSize, uint32_t count);
 void vkuDestroyUniformBuffer(VkuContext context, VkuUniformBuffer uniformBuffer);
+void vkuUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data, uint32_t bufferIndex);
 void vkuFrameUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data);
 
 typedef enum descriptorAttributeOptions
 {
     VKU_DESCRIPTOR_SET_ATTRIB_SAMPLER,
-    VKU_DESCRIPTOR_SET_ATTRIB_UNIFORM_BUFFER
+    VKU_DESCRIPTOR_SET_ATTRIB_UNIFORM_BUFFER,
+    VKU_DESCRIPTOR_SET_ATTRIB_STORAGE_BUFFER
 } descriptorAttributeOptions;
 
 typedef struct VkuDescriptorSetAttribute
@@ -555,6 +559,8 @@ typedef struct VkuDescriptorSetAttribute
     VkuTexture2DArray tex2DArray;
     VkuUniformBuffer uniformBuffer;
     VkShaderStageFlagBits shaderStage;
+    VkuBuffer storageBuffer;
+    VkDeviceSize storageBufferRange;
 } VkuDescriptorSetAttribute;
 
 typedef struct VkuDescriptorSetCreateInfo
@@ -563,11 +569,13 @@ typedef struct VkuDescriptorSetCreateInfo
     uint32_t attributeCount;
     VkuRenderStage renderStage;
     uint32_t descriptorCount;
+    VkuContext context;
 } VkuDescriptorSetCreateInfo;
 
 typedef struct VkuDescriptorSet_T
 {
     VkuRenderStage renderStage;
+    VkuContext context;
     VkuDescriptorSetAttribute *attributes;
     uint32_t attributeCount;
     uint32_t setCount;
@@ -637,5 +645,25 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
 void vkuDestroyPipeline(VkuContext context, VkuPipeline pipeline);
 void vkuFrameBindPipeline(VkuFrame frame, VkuPipeline pipeline);
 void vkuFramePipelinePushConstant(VkuFrame frame, VkuPipeline pipeline, void *data, size_t size);
+
+typedef struct VkuComputePipelineCreateInfo
+{
+    char * computeShaderSpirV;
+    uint32_t computeShaderLength;
+    VkuDescriptorSet descriptorSet;
+} VkuComputePipelineCreateInfo;
+
+typedef struct VkuComputePipeline_T
+{
+    char *internalComputeSpirv;
+    uint32_t computeShaderLength;
+    VkPipelineLayout pipelineLayout;
+    VkPipeline computePipeline;
+} VkuComputePipeline_T;
+
+typedef VkuComputePipeline_T *VkuComputePipeline;
+
+VkuComputePipeline vkuCreateComputePipeline(VkuContext context, VkuComputePipelineCreateInfo *createInfo);
+void vkuDestroyComputePipeline(VkuContext context, VkuComputePipeline computePipeline);
 
 #endif

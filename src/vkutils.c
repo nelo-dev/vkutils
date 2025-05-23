@@ -130,7 +130,13 @@ VkPhysicalDevice vkuGetOptimalPhysicalDevice(VkInstance instance, VkSurfaceKHR s
 VmaAllocator vkuCreateVmaAllocator(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
 void vkuDestroyVmaAllocator(VmaAllocator allocator);
 
-VkCommandPool vkuCreateCmdPool(VkPhysicalDevice phy_device, VkDevice device, VkBool32 transfer);
+typedef enum CmdPoolType {
+    VKU_CMD_POOL_TYPE_GRAPHICS,
+    VKU_CMD_POOL_TYPE_TRANSFER,
+    VKU_CMD_POOL_TYPE_COMPUTE
+} CmdPoolType;
+
+VkCommandPool vkuCreateCmdPool(VkPhysicalDevice phy_device, VkDevice device, CmdPoolType type);
 void vkuDestroyCommandPool(VkDevice device, VkCommandPool cmd_pool);
 
 VkCommandBuffer *vkuCreateCommandBuffer(VkDevice device, uint32_t count, VkCommandPool cmdPool);
@@ -377,7 +383,17 @@ VkShaderModule vkuCreateShaderModule(const char *shaderCode, uint32_t codeLength
 VkVertexInputBindingDescription vkuGetVertexInputBindingDescription(VkuVertexLayout *layout);
 VkVertexInputAttributeDescription *vkuGetVertexAttributeDescriptions(VkuVertexLayout *layout);
 VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo);
-void vkuDestroyGraphicsPipeline(VkDevice device, VkPipeline pipeline);
+void vkuDestroyVkPipeline(VkDevice device, VkPipeline pipeline);
+
+typedef struct VkuComputeVkPipelineCreateInfo
+{
+    VkDevice device;
+    char *computeShaderSpirv;
+    uint32_t computeShaderLength;
+    VkPipelineLayout pipelineLayout;
+} VkuComputeVkPipelineCreateInfo;
+
+VkPipeline vkuCreateComputeVkPipeline(VkuComputeVkPipelineCreateInfo *createInfo);
 
 // ===== BASIC HELPER C FUNCTIONS =====
 
@@ -1238,7 +1254,7 @@ void vkuDestroyVmaAllocator(VmaAllocator allocator)
 
 // VkCommandPool
 
-VkCommandPool vkuCreateCmdPool(VkPhysicalDevice phy_device, VkDevice device, VkBool32 transfer)
+VkCommandPool vkuCreateCmdPool(VkPhysicalDevice phy_device, VkDevice device, CmdPoolType type)
 {
     VkCommandPool cmd_pool = VK_NULL_HANDLE;
 
@@ -1248,10 +1264,12 @@ VkCommandPool vkuCreateCmdPool(VkPhysicalDevice phy_device, VkDevice device, VkB
     VkCommandPoolCreateInfo poolInfo = {};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    if (transfer)
+    if (type == VKU_CMD_POOL_TYPE_TRANSFER)
         poolInfo.queueFamilyIndex = indices.transferQueueFam;
-    else
+    else if (type == VKU_CMD_POOL_TYPE_GRAPHICS)
         poolInfo.queueFamilyIndex = indices.graphicsQueueFam;
+    else if (type == VKU_CMD_POOL_TYPE_COMPUTE)
+        poolInfo.queueFamilyIndex = indices.computeQueueFam;
 
     VK_CHECK(vkCreateCommandPool(device, &poolInfo, NULL, &cmd_pool));
 
@@ -2346,6 +2364,11 @@ VkDescriptorSetLayout vkuCreateDescriptorSetLayout(VkDevice device, VkuDescripto
         {
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         }
+
+        if (attribs[i].type == VKU_DESCRIPTOR_SET_ATTRIB_STORAGE_BUFFER)
+        {
+            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+        }
     }
 
     VkDescriptorSetLayoutCreateInfo layoutInfo = {};
@@ -2379,6 +2402,8 @@ VkDescriptorPool vkuCreateDescriptorPool(VkDevice device, VkuDescriptorSetAttrib
             poolSizes[i].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         if (attributes[i].type == VKU_DESCRIPTOR_SET_ATTRIB_UNIFORM_BUFFER)
             poolSizes[i].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        if (attributes[i].type == VKU_DESCRIPTOR_SET_ATTRIB_STORAGE_BUFFER)
+            poolSizes[i].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
         poolSizes[i].descriptorCount = setCount;
     }
 
@@ -2463,6 +2488,23 @@ VkDescriptorSet *vkuCreateDescriptorSets(VkuDescriptorSetsCreateInfo *createInfo
                 descriptorWrites[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
                 descriptorWrites[j].descriptorCount = 1;
                 descriptorWrites[j].pBufferInfo = &bufferInfos[j];
+            }
+
+            if (createInfo->attributes[j].type == VKU_DESCRIPTOR_SET_ATTRIB_STORAGE_BUFFER)
+            {
+                bufferInfos[j].buffer = createInfo->attributes[j].storageBuffer->buffer;
+                bufferInfos[j].offset = 0; 
+                bufferInfos[j].range = createInfo->attributes[j].storageBufferRange;
+
+                descriptorWrites[j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                descriptorWrites[j].dstSet = descriptor_sets[i];
+                descriptorWrites[j].dstBinding = j;
+                descriptorWrites[j].dstArrayElement = 0;
+                descriptorWrites[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+                descriptorWrites[j].descriptorCount = 1;
+                descriptorWrites[j].pBufferInfo = &bufferInfos[j];
+                descriptorWrites[j].pImageInfo = NULL;
+                descriptorWrites[j].pTexelBufferView = NULL;
             }
         }
 
@@ -2694,9 +2736,33 @@ VkPipeline vkuCreateGraphicsPipeline(VkuGraphicsPipelineCreateInfo *createInfo)
     return graphicsPipeline;
 }
 
-void vkuDestroyGraphicsPipeline(VkDevice device, VkPipeline pipeline)
+void vkuDestroyVkPipeline(VkDevice device, VkPipeline pipeline)
 {
     vkDestroyPipeline(device, pipeline, NULL);
+}
+
+VkPipeline vkuCreateComputeVkPipeline(VkuComputeVkPipelineCreateInfo *createInfo) {
+    VkShaderModule computeShaderModule = vkuCreateShaderModule(createInfo->computeShaderSpirv, createInfo->computeShaderLength, createInfo->device);
+
+    VkPipelineShaderStageCreateInfo shaderStageInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+        .module = computeShaderModule,
+        .pName = "main"
+    };
+
+    VkComputePipelineCreateInfo pipelineInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage = shaderStageInfo,
+        .layout = createInfo->pipelineLayout
+    };
+
+    VkPipeline pipeline;
+    VK_CHECK(vkCreateComputePipelines(createInfo->device, VK_NULL_HANDLE, 1, &pipelineInfo, NULL, &pipeline));
+
+    vkDestroyShaderModule(createInfo->device, computeShaderModule, NULL);
+
+    return pipeline;
 }
 
 /** ######################################
@@ -2906,7 +2972,7 @@ VkuMemoryManager vkuCreateMemoryManager(VkuMemoryManagerCreateInfo *createInfo)
     manager->device = createInfo->device;
     manager->transferQueue = createInfo->transferQueue;
     manager->allocator = vkuCreateVmaAllocator(createInfo->instance, createInfo->physicalDevice, createInfo->device);
-    manager->transferCmdPool = vkuCreateCmdPool(createInfo->physicalDevice, createInfo->device, (createInfo->transferQueue != VK_NULL_HANDLE) ? VK_TRUE : VK_FALSE);
+    manager->transferCmdPool = vkuCreateCmdPool(createInfo->physicalDevice, createInfo->device, (createInfo->transferQueue != VK_NULL_HANDLE) ? VKU_CMD_POOL_TYPE_TRANSFER : VKU_CMD_POOL_TYPE_GRAPHICS);
     manager->fences = NULL;
     manager->fenceCount = 0;
     manager->destructionQueue = vkuQueueCreate(128);
@@ -2935,7 +3001,7 @@ VkDeviceSize vkuMemoryMamgerGetAllocatedMemorySize(VkuMemoryManager manager)
     return stats.total.statistics.blockBytes;
 }
 
-VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage)
+VkuBuffer vkuCreateBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBufferUsage usage)
 {
     VkuBuffer_T *buffer = (VkuBuffer_T *)calloc(1, sizeof(VkuBuffer_T));
     buffer->size = size;
@@ -2944,7 +3010,7 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
     VkBufferCreateInfo bufferInfo = {};
     VmaAllocationCreateInfo allocInfo = {};
 
-    if (usage == VKU_BUFFER_USAGE_CPU_TO_GPU)
+    if ((usage & VKU_BUFFER_USAGE_CPU_TO_GPU) == VKU_BUFFER_USAGE_CPU_TO_GPU)
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
@@ -2952,11 +3018,15 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
         allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }
-    else if (usage == VKU_BUFFER_USAGE_GPU_ONLY)
+    else if ((usage & VKU_BUFFER_USAGE_GPU_ONLY) == VKU_BUFFER_USAGE_GPU_ONLY)
     {
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = size;
         bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+        if ((usage & VKU_BUFFER_USAGE_COMPUTE) == VKU_BUFFER_USAGE_COMPUTE)
+            bufferInfo.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
         allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     }
@@ -2965,7 +3035,7 @@ VkuBuffer vkuCreateVertexBuffer(VkuMemoryManager manager, VkDeviceSize size, Vku
     return buffer;
 };
 
-void vkuDestroyVertexBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize)
+void vkuDestroyBuffer(VkuBuffer buffer, VkuMemoryManager manager, VkBool32 syncronize)
 {
     if (buffer == NULL)
         return;
@@ -3009,7 +3079,7 @@ void vkuDestroyBuffersInDestructionQueue(VkuMemoryManager manager, VkuPresenter 
     }
 }
 
-void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size)
+void vkuSetBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *data, size_t size)
 {
     void *mapped_data = NULL;
     vmaMapMemory(manager->allocator, buffer->allocation, &mapped_data);
@@ -3017,14 +3087,14 @@ void vkuSetVertexBufferData(VkuMemoryManager manager, VkuBuffer buffer, void *da
     vmaUnmapMemory(manager->allocator, buffer->allocation);
 }
 
-void * vkuMapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer)
+void * vkuMapBuffer(VkuMemoryManager manager, VkuBuffer buffer)
 {
     void *mapped_data = NULL;
     vmaMapMemory(manager->allocator, buffer->allocation, &mapped_data);
     return mapped_data;
 }
 
-void vkuUnmapVertexBuffer(VkuMemoryManager manager, VkuBuffer buffer)
+void vkuUnmapBuffer(VkuMemoryManager manager, VkuBuffer buffer)
 {
     vmaUnmapMemory(manager->allocator, buffer->allocation);
 }
@@ -3097,7 +3167,7 @@ VkuContext vkuCreateContext(VkuContextCreateInfo *createInfo)
 
     context->debugMessenger = vkuCreateVkDebugMessenger(context->instance, createInfo->enableValidation);
 
-    if ((createInfo->usage & VKU_CONTEXT_USAGE_BASIC) == VKU_CONTEXT_USAGE_BASIC || (createInfo->usage & VKU_CONTEXT_USAGE_COMPUTE) == VKU_CONTEXT_USAGE_COMPUTE)
+    if ((createInfo->usage & VKU_CONTEXT_USAGE_PRESENTATION) != VKU_CONTEXT_USAGE_PRESENTATION)
     {
         context->physicalDevice = vkuGetOptimalPhysicalDevice(context->instance, VK_NULL_HANDLE);
 
@@ -3123,7 +3193,8 @@ VkuContext vkuCreateContext(VkuContextCreateInfo *createInfo)
 
         context->memoryManager = vkuCreateMemoryManager(&memoryManagerCreateInfo);
 
-        context->graphicsCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, false);
+        context->graphicsCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, VKU_CMD_POOL_TYPE_GRAPHICS);
+        context->computeCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, VKU_CMD_POOL_TYPE_COMPUTE);
     }
     else
     {
@@ -3140,6 +3211,7 @@ void vkuDestroyContext(VkuContext context)
     if (context->device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(context->device);
+        vkuDestroyCommandPool(context->device, context->computeCmdPool);
         vkuDestroyCommandPool(context->device, context->graphicsCmdPool);
         vkuDestroyMemoryManager(context->memoryManager);
         vkuDestroyVkDevice(context->device);
@@ -3160,8 +3232,8 @@ void vkuContextPhysicalDeviceWithSurfaceSupport(VkuContext context, VkSurfaceKHR
     if ((context->usageFlags & VKU_CONTEXT_USAGE_PRESENTATION) != VKU_CONTEXT_USAGE_PRESENTATION)
         EXIT("VkuError: Please set VKU_CONTEXT_USAGE_PRESENTATION flag during vkuContextCreation when using a vkuPresenter!\n");
 
-    if ((context->usageFlags & VKU_CONTEXT_USAGE_BASIC) == VKU_CONTEXT_USAGE_BASIC)
-        printf("VkuWarning: When VKU_CONTEXT_USAGE_PRESENTATION | VKU_CONTEXT_USAGE_BASIC is set, Objects have to be recreated during vkuPresenter creation!\n");
+    if ((context->usageFlags & VKU_CONTEXT_USAGE_OFFSCREEN) == VKU_CONTEXT_USAGE_OFFSCREEN)
+        printf("VkuPerformanceWarning: When VKU_CONTEXT_USAGE_PRESENTATION | VKU_CONTEXT_USAGE_BASIC is set, Objects have to be recreated internally during vkuPresenter creation!\n");
 
     VkPhysicalDevice supportedPhysicalDevice = vkuGetOptimalPhysicalDevice(context->instance, surface);
 
@@ -3173,6 +3245,11 @@ void vkuContextPhysicalDeviceWithSurfaceSupport(VkuContext context, VkSurfaceKHR
     if (context->graphicsCmdPool != VK_NULL_HANDLE)
     {
         vkuDestroyCommandPool(context->device, context->graphicsCmdPool);
+    }
+
+    if (context->computeCmdPool != VK_NULL_HANDLE)
+    {
+        vkuDestroyCommandPool(context->device, context->computeCmdPool);
     }
 
     if (context->device != VK_NULL_HANDLE)
@@ -3204,7 +3281,8 @@ void vkuContextPhysicalDeviceWithSurfaceSupport(VkuContext context, VkSurfaceKHR
 
     context->memoryManager = vkuCreateMemoryManager(&memoryManagerCreateInfo);
 
-    context->graphicsCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, false);
+    context->graphicsCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, VKU_CMD_POOL_TYPE_GRAPHICS);
+    context->computeCmdPool = vkuCreateCmdPool(context->physicalDevice, context->device, VKU_CMD_POOL_TYPE_COMPUTE);
 }
 
 VkuMemoryManager vkuContextGetMemoryManager(VkuContext context)
@@ -3341,8 +3419,6 @@ VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo)
 
     presenter->window = vkuCreateWindow(&windowCreateInfo);
 
-    printf("%s", SDL_GetError());
-
     presenter->surface = vkuCreateSurface(createInfo->context->instance, presenter->window->sdlWindow);
     vkuContextPhysicalDeviceWithSurfaceSupport(createInfo->context, presenter->surface);
 
@@ -3379,7 +3455,6 @@ VkuPresenter vkuCreatePresenter(VkuPresenterCreateInfo *createInfo)
     presenter->resourceManager = vkuCreateRenderResourceManager(presenter);
     presenter->renderStageManager = vkuCreateObjectManager(sizeof(VkuRenderStage));
 
-    // Set Fences for MemoryManager for BufferDestruction
     presenter->context->memoryManager->fences = presenter->inFlightFences;
     presenter->context->memoryManager->fenceCount = presenter->framesInFlight;
 
@@ -4522,22 +4597,29 @@ void vkuDestroyUniformBuffer(VkuContext context, VkuUniformBuffer uniformBuffer)
     free(uniformBuffer);
 }
 
+void vkuUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data, uint32_t bufferIndex)
+{
+    memcpy(uniBuffer->mappedMemory[bufferIndex], data, uniBuffer->bufferSize);
+}
+
+
 // VkuDescriptorSet
 
 VkuDescriptorSet vkuCreateDescriptorSet(VkuDescriptorSetCreateInfo *createInfo)
 {
     VkuDescriptorSet_T *set = (VkuDescriptorSet_T *)calloc(1, sizeof(VkuDescriptorSet_T));
     set->renderStage = createInfo->renderStage;
-    set->setCount = (set->renderStage->staticRenderStage == VK_FALSE) ? set->renderStage->presenter->framesInFlight : createInfo->descriptorCount;
+    set->context = createInfo->context;
+    set->setCount = createInfo->descriptorCount;
 
-    set->setLayout = vkuCreateDescriptorSetLayout(set->renderStage->context->device, createInfo->attributes, createInfo->attributeCount);
-    set->pool = vkuCreateDescriptorPool(set->renderStage->context->device, createInfo->attributes, createInfo->attributeCount, set->setCount);
+    set->setLayout = vkuCreateDescriptorSetLayout(set->context->device, createInfo->attributes, createInfo->attributeCount);
+    set->pool = vkuCreateDescriptorPool(set->context->device, createInfo->attributes, createInfo->attributeCount, set->setCount);
 
     VkuDescriptorSetsCreateInfo setsInfo = {
         .setCount = set->setCount,
         .setLayout = set->setLayout,
         .pool = set->pool,
-        .device = set->renderStage->context->device,
+        .device = set->context->device,
         .attributes = createInfo->attributes,
         .attribCount = createInfo->attributeCount,
     };
@@ -4556,7 +4638,7 @@ VkuDescriptorSet vkuCreateDescriptorSet(VkuDescriptorSetCreateInfo *createInfo)
         set->attributes[i].shaderStage = createInfo->attributes[i].shaderStage;
     }
 
-    if (set->renderStage->staticRenderStage == VK_FALSE)
+    if (set->renderStage != NULL && set->renderStage->staticRenderStage == VK_FALSE)
         vkuObjectManagerAdd(set->renderStage->descriptorSetManager, (void *)set);
 
     return set;
@@ -4585,10 +4667,11 @@ void vkuDescriptorSetUpdate(VkuDescriptorSet descriptorSet)
 
 void vkuDestroyDescriptorSet(VkuDescriptorSet set)
 {
-    vkuObjectManagerRemove(set->renderStage->descriptorSetManager, (void *)set);
+    if (set->renderStage != NULL)
+        vkuObjectManagerRemove(set->renderStage->descriptorSetManager, (void *)set);
     vkuDestroyDescriptorSets(set->sets);
-    vkuDestroyDescriptorPool(set->renderStage->context->device, set->pool);
-    vkuDestroyDescriptorSetLayout(set->renderStage->context->device, set->setLayout);
+    vkuDestroyDescriptorPool(set->context->device, set->pool);
+    vkuDestroyDescriptorSetLayout(set->context->device, set->setLayout);
     free(set->attributes);
     free(set);
 }
@@ -4665,7 +4748,7 @@ VkuPipeline vkuCreatePipeline(VkuContext context, VkuPipelineCreateInfo *createI
 
 void vkuPipelineUpdate(VkuPipeline pipeline)
 {
-    vkuDestroyGraphicsPipeline(pipeline->renderStage->context->device, pipeline->graphicsPipeline);
+    vkuDestroyVkPipeline(pipeline->renderStage->context->device, pipeline->graphicsPipeline);
 
     VkuGraphicsPipelineCreateInfo pipelineCreateInfo = {
         .device = pipeline->renderStage->context->device,
@@ -4703,7 +4786,34 @@ void vkuDestroyPipeline(VkuContext context, VkuPipeline pipeline)
         free(pipeline->internalFragmentSpirv);
 
     free(pipeline->vertexAttributes);
-    vkuDestroyGraphicsPipeline(context->device, pipeline->graphicsPipeline);
+    vkuDestroyVkPipeline(context->device, pipeline->graphicsPipeline);
     vkuDestroyPipelineLayout(context->device, pipeline->pipelineLayout);
     free(pipeline);
+}
+
+VkuComputePipeline vkuCreateComputePipeline(VkuContext context, VkuComputePipelineCreateInfo *createInfo) {
+    VkuComputePipeline_T *pipeline = (VkuComputePipeline_T *)calloc(1, sizeof(VkuComputePipeline_T));
+
+    pipeline->internalComputeSpirv = (char *)malloc((createInfo->computeShaderLength) * sizeof(char));
+    memcpy(pipeline->internalComputeSpirv, createInfo->computeShaderSpirV, createInfo->computeShaderLength * sizeof(char));
+
+    pipeline->pipelineLayout = vkuCreatePipelineLayout(context->device, &createInfo->descriptorSet->setLayout, (createInfo->descriptorSet != NULL) ? 1 : 0);
+
+    VkuComputeVkPipelineCreateInfo computePipelineCreateInfo = {
+        .computeShaderLength = createInfo->computeShaderLength,
+        .computeShaderSpirv = createInfo->computeShaderSpirV,
+        .device = context->device,
+        .pipelineLayout = pipeline->pipelineLayout
+    };
+
+    pipeline->computePipeline = vkuCreateComputeVkPipeline(&computePipelineCreateInfo);
+
+    return pipeline;
+}
+
+void vkuDestroyComputePipeline(VkuContext context, VkuComputePipeline computePipeline) {
+    vkuDestroyVkPipeline(context->device, computePipeline->computePipeline);
+    vkuDestroyPipelineLayout(context->device, computePipeline->pipelineLayout);
+    free(computePipeline->internalComputeSpirv);
+    free(computePipeline);
 }
