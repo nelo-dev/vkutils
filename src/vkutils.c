@@ -4319,7 +4319,7 @@ VkuFrame vkuPresenterBeginFrame(VkuPresenter presenter)
     return frame;
 }
 
-void vkuPresenterSubmitFrame(VkuFrame frame)
+void vkuPresenterSubmitFrame(VkuFrame frame, VkuComputeRun syncComputeRun)
 {
     int currentFrame = frame->presenter->currentFrame;
     int imageIndex = frame->imageIndex;
@@ -4329,9 +4329,16 @@ void vkuPresenterSubmitFrame(VkuFrame frame)
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = {frame->presenter->imageAvailableSemaphores[currentFrame]};
-    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSemaphore waitSemaphores[2] = {frame->presenter->imageAvailableSemaphores[currentFrame]};
+    VkPipelineStageFlags waitStages[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
+
+    if (syncComputeRun != NULL) {
+        waitSemaphores[1] = syncComputeRun->executor->computeFinishedSemaphores[syncComputeRun->lastFrame];
+        waitStages[1] = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+        submitInfo.waitSemaphoreCount = 2;
+    }
+
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
@@ -4339,6 +4346,7 @@ void vkuPresenterSubmitFrame(VkuFrame frame)
 
     VkSemaphore signalSemaphores[] = {frame->presenter->renderFinishedSemaphores[currentFrame]};
     submitInfo.signalSemaphoreCount = 1;
+
     submitInfo.pSignalSemaphores = signalSemaphores;
 
     VK_CHECK(vkQueueSubmit(frame->presenter->context->graphicsQueue, 1, &submitInfo, frame->presenter->inFlightFences[currentFrame]));
@@ -4443,11 +4451,11 @@ void vkuFramePipelinePushConstant(VkuFrame frame, VkuPipeline pipeline, void *da
     vkCmdPushConstants(frame->cmdBuffer, pipeline->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, size, data);
 }
 
-void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount)
+void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount, uint32_t firstVertex)
 {
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(frame->cmdBuffer, 0, 1, &buffer->buffer, offsets);
-    vkCmdDraw(frame->cmdBuffer, vertexCount, instanceCount, 0, 0);
+    vkCmdDraw(frame->cmdBuffer, vertexCount, instanceCount, firstVertex, 0);
 }
 
 void vkuFrameUpdateUniformBuffer(VkuFrame frame, VkuUniformBuffer uniBuffer, void *data)
@@ -4791,9 +4799,110 @@ void vkuDestroyPipeline(VkuContext context, VkuPipeline pipeline)
     free(pipeline);
 }
 
+VkuComputeExecutor vkuCreateComputeExecutor(VkuContext context, uint32_t framesInFlight) {
+    VkuComputeExecutor executor = calloc(1, sizeof(VkuComputeExecutor_T));
+    executor->currentFrame = 0;
+    executor->context = context;
+    executor->framesInFlight = framesInFlight;
+    executor->computeFinishedSemaphores = malloc(sizeof(VkSemaphore) * framesInFlight);
+    executor->computeInFlightFences = malloc(sizeof(VkFence) *framesInFlight);
+    executor->computeCommandBuffers = malloc(sizeof(VkCommandBuffer) *framesInFlight);
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < framesInFlight; i++) {
+        VK_CHECK(vkCreateSemaphore(context->device, &semaphoreInfo, NULL, &(executor->computeFinishedSemaphores[i])));
+        VK_CHECK(vkCreateFence(context->device, &fenceInfo, NULL, &(executor->computeInFlightFences[i])));
+    }
+
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = context->computeCmdPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = (uint32_t) framesInFlight;
+
+    VK_CHECK(vkAllocateCommandBuffers(context->device, &allocInfo, executor->computeCommandBuffers));
+
+    return executor;
+}
+
+void vkuDestroyComputeExecutor(VkuComputeExecutor computeExecutor) {
+    for (size_t i = 0; i < computeExecutor->framesInFlight; i++) {
+        vkDestroySemaphore(computeExecutor->context->device, computeExecutor->computeFinishedSemaphores[i], NULL);
+        vkDestroyFence(computeExecutor->context->device, computeExecutor->computeInFlightFences[i], NULL);
+    }
+
+    free(computeExecutor->computeCommandBuffers);
+    free(computeExecutor->computeFinishedSemaphores);
+    free(computeExecutor->computeInFlightFences);
+    free(computeExecutor);
+}
+
+VkuComputeRun vkuComputeExecutorStartRun(VkuComputeExecutor executor) {
+    if (executor->activeRun)
+        EXIT("VkuError: Only one VkuComputeRun can be active at the same time!");
+    executor->activeRun = VK_TRUE;
+
+    VkuComputeRun run = calloc(1, sizeof(VkuComputeRun_T));
+    run->executor = executor;
+
+    vkWaitForFences(executor->context->device, 1, &executor->computeInFlightFences[executor->currentFrame], VK_TRUE, UINT64_MAX);
+    vkResetFences(executor->context->device, 1, &executor->computeInFlightFences[executor->currentFrame]);
+    vkResetCommandBuffer(executor->computeCommandBuffers[executor->currentFrame], 0);
+
+    VkCommandBufferBeginInfo beginInfo= {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    VK_CHECK(vkBeginCommandBuffer(executor->computeCommandBuffers[executor->currentFrame], &beginInfo));
+
+    return run;
+}
+
+void vkuComputeExecutorFinishRun(VkuComputeRun computeRun, VkBool32 enableFrameSyncronization) {
+    VK_CHECK(vkEndCommandBuffer(computeRun->executor->computeCommandBuffers[computeRun->executor->currentFrame]));
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &computeRun->executor->computeCommandBuffers[computeRun->executor->currentFrame];
+
+    if (enableFrameSyncronization) {
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &computeRun->executor->computeFinishedSemaphores[computeRun->executor->currentFrame];
+    }
+
+    VK_CHECK(vkQueueSubmit(computeRun->executor->context->computeQueue, 1, &submitInfo, computeRun->executor->computeInFlightFences[computeRun->executor->currentFrame]));
+
+    computeRun->lastFrame = computeRun->executor->currentFrame;
+    computeRun->executor->currentFrame = (computeRun->executor->currentFrame + 1) % computeRun->executor->framesInFlight;
+
+    computeRun->executor->activeRun = false;
+    free(computeRun);
+}
+
+void vkuComputeRunBindComputePipeline(VkuComputeRun computeRun, VkuComputePipeline pipeline, uint32_t dynamicOffsetCount, uint32_t * dynamicOffsets) {
+    vkCmdBindPipeline(computeRun->executor->computeCommandBuffers[computeRun->executor->currentFrame], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->computePipeline);
+    vkCmdBindDescriptorSets(computeRun->executor->computeCommandBuffers[computeRun->executor->currentFrame], VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->pipelineLayout, 0, 1, &pipeline->descriptorSet->sets[computeRun->executor->currentFrame], dynamicOffsetCount, dynamicOffsets);
+}
+
+void vkuComputeRunDispatch(VkuComputeRun computeRun, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ) {
+    vkCmdDispatch(computeRun->executor->computeCommandBuffers[computeRun->executor->currentFrame], groupCountX, groupCountY, groupCountZ);
+}
+
+void vkuComputeRunUpdateUniformBuffer(VkuComputeRun computeRun, VkuUniformBuffer uniBuffer, void *data)
+{
+    memcpy(uniBuffer->mappedMemory[computeRun->executor->currentFrame], data, uniBuffer->bufferSize);
+}
+
 VkuComputePipeline vkuCreateComputePipeline(VkuContext context, VkuComputePipelineCreateInfo *createInfo) {
     VkuComputePipeline_T *pipeline = (VkuComputePipeline_T *)calloc(1, sizeof(VkuComputePipeline_T));
 
+    pipeline->descriptorSet = createInfo->descriptorSet;
     pipeline->internalComputeSpirv = (char *)malloc((createInfo->computeShaderLength) * sizeof(char));
     memcpy(pipeline->internalComputeSpirv, createInfo->computeShaderSpirV, createInfo->computeShaderLength * sizeof(char));
 

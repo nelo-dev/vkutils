@@ -450,11 +450,13 @@ typedef struct VkuFrame_T
 
 typedef struct VkuFrame_T *VkuFrame;
 
+typedef struct VkuComputeRun_T * VkuComputeRun;
+
 VkuFrame vkuPresenterBeginFrame(VkuPresenter presenter);
-void vkuPresenterSubmitFrame(VkuFrame frame);
+void vkuPresenterSubmitFrame(VkuFrame frame, VkuComputeRun syncComputeRun);
 void vkuFrameBeginRenderStage(VkuFrame frame, VkuRenderStage renderStage);
 void vkuFrameFinishRenderStage(VkuFrame frame, VkuRenderStage renderStage);
-void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount);
+void vkuFrameDrawVertexBuffer(VkuFrame frame, VkuBuffer buffer, uint64_t vertexCount, uint32_t instanceCount, uint32_t firstVertex);
 void vkuFrameDrawVoid(VkuFrame frame, uint64_t vertexCount);
 
 typedef struct VkuTexture2DCreateInfo
@@ -646,6 +648,30 @@ void vkuDestroyPipeline(VkuContext context, VkuPipeline pipeline);
 void vkuFrameBindPipeline(VkuFrame frame, VkuPipeline pipeline);
 void vkuFramePipelinePushConstant(VkuFrame frame, VkuPipeline pipeline, void *data, size_t size);
 
+typedef struct VkuComputeExecutor_T
+{
+    VkuContext context;
+    uint32_t framesInFlight;
+    VkFence * computeInFlightFences;
+    VkSemaphore * computeFinishedSemaphores;
+    VkCommandBuffer * computeCommandBuffers;
+    VkBool32 activeRun;
+    uint32_t currentFrame;
+} VkuComputeExecutor_T;
+
+typedef struct VkuComputeExecutor_T * VkuComputeExecutor;
+
+typedef struct VkuComputeRun_T {
+    VkuComputeExecutor executor;
+    uint32_t lastFrame;
+} VkuComputeRun_T;
+
+VkuComputeExecutor vkuCreateComputeExecutor(VkuContext context, uint32_t framesInFlight);
+void vkuDestroyComputeExecutor(VkuComputeExecutor computeExecutor);
+VkuComputeRun vkuComputeExecutorStartRun(VkuComputeExecutor executor);
+void vkuComputeExecutorFinishRun(VkuComputeRun computeRun, VkBool32 enableFrameSyncronization);
+void vkuComputeRunUpdateUniformBuffer(VkuComputeRun computeRun, VkuUniformBuffer uniBuffer, void *data);
+
 typedef struct VkuComputePipelineCreateInfo
 {
     char * computeShaderSpirV;
@@ -659,11 +685,14 @@ typedef struct VkuComputePipeline_T
     uint32_t computeShaderLength;
     VkPipelineLayout pipelineLayout;
     VkPipeline computePipeline;
+    VkuDescriptorSet descriptorSet;
 } VkuComputePipeline_T;
 
 typedef VkuComputePipeline_T *VkuComputePipeline;
 
 VkuComputePipeline vkuCreateComputePipeline(VkuContext context, VkuComputePipelineCreateInfo *createInfo);
 void vkuDestroyComputePipeline(VkuContext context, VkuComputePipeline computePipeline);
+void vkuComputeRunBindComputePipeline(VkuComputeRun computeRun, VkuComputePipeline pipeline, uint32_t dynamicOffsetCount, uint32_t * dynamicOffsets);
+void vkuComputeRunDispatch(VkuComputeRun computeRun, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
 
 #endif
