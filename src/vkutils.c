@@ -3005,7 +3005,7 @@ VkuBuffer vkuCreateBuffer(VkuMemoryManager manager, VkDeviceSize size, VkuBuffer
 {
     VkuBuffer_T *buffer = (VkuBuffer_T *)calloc(1, sizeof(VkuBuffer_T));
     buffer->size = size;
-    buffer->queuedForDestruction = ATOMIC_VAR_INIT(false);
+    atomic_init(&buffer->queuedForDestruction, false);
 
     VkBufferCreateInfo bufferInfo = {};
     VmaAllocationCreateInfo allocInfo = {};
@@ -4807,6 +4807,7 @@ VkuComputeExecutor vkuCreateComputeExecutor(VkuContext context, uint32_t framesI
     executor->computeFinishedSemaphores = malloc(sizeof(VkSemaphore) * framesInFlight);
     executor->computeInFlightFences = malloc(sizeof(VkFence) *framesInFlight);
     executor->computeCommandBuffers = malloc(sizeof(VkCommandBuffer) *framesInFlight);
+    executor->activeComputeRun = malloc(sizeof(VkuComputeRun_T));
 
     VkSemaphoreCreateInfo semaphoreInfo = {};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -4837,6 +4838,7 @@ void vkuDestroyComputeExecutor(VkuComputeExecutor computeExecutor) {
         vkDestroyFence(computeExecutor->context->device, computeExecutor->computeInFlightFences[i], NULL);
     }
 
+    free(computeExecutor->activeComputeRun);
     free(computeExecutor->computeCommandBuffers);
     free(computeExecutor->computeFinishedSemaphores);
     free(computeExecutor->computeInFlightFences);
@@ -4848,7 +4850,9 @@ VkuComputeRun vkuComputeExecutorStartRun(VkuComputeExecutor executor) {
         EXIT("VkuError: Only one VkuComputeRun can be active at the same time!");
     executor->activeRun = VK_TRUE;
 
-    VkuComputeRun run = calloc(1, sizeof(VkuComputeRun_T));
+
+    VkuComputeRun run = executor->activeComputeRun;
+    memset(run, 0, sizeof(VkuComputeRun_T));
     run->executor = executor;
 
     vkWaitForFences(executor->context->device, 1, &executor->computeInFlightFences[executor->currentFrame], VK_TRUE, UINT64_MAX);
@@ -4882,7 +4886,6 @@ void vkuComputeExecutorFinishRun(VkuComputeRun computeRun, VkBool32 enableFrameS
     computeRun->executor->currentFrame = (computeRun->executor->currentFrame + 1) % computeRun->executor->framesInFlight;
 
     computeRun->executor->activeRun = false;
-    free(computeRun);
 }
 
 void vkuComputeRunBindComputePipeline(VkuComputeRun computeRun, VkuComputePipeline pipeline, uint32_t dynamicOffsetCount, uint32_t * dynamicOffsets) {

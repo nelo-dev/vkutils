@@ -44,6 +44,7 @@
 #include <SDL3/SDL_vulkan.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <cglm/cglm.h>
 #include <cglm/affine.h>
 
@@ -657,6 +658,7 @@ typedef struct VkuComputeExecutor_T
     VkCommandBuffer * computeCommandBuffers;
     VkBool32 activeRun;
     uint32_t currentFrame;
+    VkuComputeRun activeComputeRun;
 } VkuComputeExecutor_T;
 
 typedef struct VkuComputeExecutor_T * VkuComputeExecutor;
