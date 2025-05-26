@@ -38,6 +38,8 @@
 #include "../external/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "../external/stb/stb_image_write.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "../external/stb/stb_truetype.h"
 
 #define CLAMP(value, min, max) ((value) < (min) ? (min) : ((value) > (max) ? (max) : (value)))
 
@@ -4928,4 +4930,69 @@ void vkuDestroyComputePipeline(VkuContext context, VkuComputePipeline computePip
     vkuDestroyPipelineLayout(context->device, computePipeline->pipelineLayout);
     free(computePipeline->internalComputeSpirv);
     free(computePipeline);
+}
+
+// VKUI 
+
+VkuFontRenderer vkuCreateFontRenderer(VkuContext context, const char * fontPath, float pixelHeight) {
+    VkuFontRenderer renderer = calloc(1, sizeof(VkuFontRenderer_T));
+    renderer->context = context;
+
+    FILE* fontFile = fopen(fontPath, "rb");
+    if (!fontFile) EXIT("VkuError: Couldn't find font .ttf file!\n");
+
+    fseek(fontFile, 0, SEEK_END);
+    size_t size = ftell(fontFile);
+    rewind(fontFile);
+
+    unsigned char* fontBuffer = (unsigned char*)malloc(size);
+    fread(fontBuffer, 1, size, fontFile);
+    fclose(fontFile);
+
+    renderer->texWidth = 512;
+    renderer->texHeight = 512;
+
+    unsigned char* monoBitmap = (unsigned char*)calloc(renderer->texWidth * renderer->texHeight, 1);
+    stbtt_BakeFontBitmap(fontBuffer, 0, pixelHeight, monoBitmap, renderer->texWidth, renderer->texHeight, 32, 96, renderer->charData);
+
+    // Convert to 4-channel RGBA
+    renderer->bakedFontBitmap = (unsigned char*)malloc(renderer->texWidth * renderer->texHeight * 4);
+    for (int i = 0; i < renderer->texWidth * renderer->texHeight; i++) {
+        unsigned char alpha = monoBitmap[i];
+        renderer->bakedFontBitmap[i * 4 + 0] = 255;
+        renderer->bakedFontBitmap[i * 4 + 1] = 255;
+        renderer->bakedFontBitmap[i * 4 + 2] = 255;
+        renderer->bakedFontBitmap[i * 4 + 3] = alpha;
+    }
+    free(monoBitmap);
+
+    stbtt_fontinfo font;
+    stbtt_InitFont(&font, fontBuffer, 0);
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(&font, &ascent, &descent, &lineGap);
+
+    float scale = stbtt_ScaleForPixelHeight(&font, pixelHeight);
+    renderer->ascent  = ascent  * scale;
+    renderer->descent = descent * scale;
+    renderer->lineGap = lineGap * scale;
+
+    free(fontBuffer);
+
+    VkuTexture2DCreateInfo texInfo = {
+        .channels = 4,
+        .height = renderer->texHeight,
+        .width = renderer->texWidth,
+        .pixelData = renderer->bakedFontBitmap,
+        .mipLevels = 1
+    };
+
+    renderer->fontTexture = vkuCreateTexture2D(context, &texInfo);
+
+    return renderer;
+}
+
+void vkuDestroyFontRenderer(VkuFontRenderer fontRenderer) {
+    vkuDestroyTexture2D(fontRenderer->context, fontRenderer->fontTexture);
+    free(fontRenderer->bakedFontBitmap);
+    free(fontRenderer);
 }

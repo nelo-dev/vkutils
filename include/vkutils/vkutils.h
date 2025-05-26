@@ -47,6 +47,7 @@
 #include <stdatomic.h>
 #include <cglm/cglm.h>
 #include <cglm/affine.h>
+#include "../external/stb/stb_truetype.h"
 
 #ifdef __cplusplus
     #include <atomic>
@@ -696,5 +697,29 @@ VkuComputePipeline vkuCreateComputePipeline(VkuContext context, VkuComputePipeli
 void vkuDestroyComputePipeline(VkuContext context, VkuComputePipeline computePipeline);
 void vkuComputeRunBindComputePipeline(VkuComputeRun computeRun, VkuComputePipeline pipeline, uint32_t dynamicOffsetCount, uint32_t * dynamicOffsets);
 void vkuComputeRunDispatch(VkuComputeRun computeRun, uint32_t groupCountX, uint32_t groupCountY, uint32_t groupCountZ);
+
+// VKUI
+
+typedef struct VkuFontRenderer_T {
+    VkuContext context;
+    VkuTexture2D fontTexture;
+    VkuTextureSampler fontSampler;
+    VkuBuffer fontBuffer;
+    VkuDescriptorSet fontDescriptorSet;
+
+    uint32_t texWidth;
+    uint32_t texHeight;
+    float ascent;
+    float descent;
+    float lineGap;
+
+    unsigned char* bakedFontBitmap;
+    stbtt_bakedchar charData[96];
+} VkuFontRenderer_T;
+
+typedef struct VkuFontRenderer_T * VkuFontRenderer;
+
+VkuFontRenderer vkuCreateFontRenderer(VkuContext context, const char * fontPath, float pixelHeight);
+void vkuDestroyFontRenderer(VkuFontRenderer fontRenderer);
 
 #endif
