@@ -1,5 +1,5 @@
 ![Logo](icon.png)
-# VkUtils
+# VkUtils (DISCONTINUED)
 ## 🕶️ Overview
 This project is my attempt to create a Vulkan API abstraction for C, as there are not many libraries available for C developers. This abstraction significantly simplifies the use of Vulkan without compromising performance. It is designed for simple to medium-sized games or scientific applications.
 
